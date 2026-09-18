@@ -733,9 +733,26 @@ export const AdminAnalyticsDashboard: React.FC = () => {
                             </div>
                           </td>
 
-                          {/* Email */}
+                          {/* Email & Status */}
                           <td className="py-3 px-4 font-mono text-[11px] text-slate-600 dark:text-slate-400">
-                            {student.email || <span className="italic text-slate-400">अतिथि (Guest)</span>}
+                            <div>{student.email || <span className="italic text-slate-400">अतिथि (Guest)</span>}</div>
+                            <div className="flex items-center gap-1.5 mt-1">
+                              <span className={`inline-flex items-center gap-1 px-1.5 py-0.2 rounded text-[9px] font-bold ${
+                                student.isPro
+                                  ? 'bg-amber-100 dark:bg-amber-950/80 text-amber-700 dark:text-amber-300'
+                                  : student.email?.includes('@gmail.com')
+                                    ? 'bg-blue-50 dark:bg-blue-950/60 text-[#0052FF] dark:text-blue-400'
+                                    : 'bg-emerald-50 dark:bg-emerald-950/60 text-emerald-700 dark:text-emerald-300'
+                              }`}>
+                                <span className="w-1 h-1 rounded-full bg-current"></span>
+                                {student.entryStatus || (student.isPro ? 'प्रो सक्रिय' : (student.email?.includes('@gmail.com') ? 'Google प्रमाणीकृत' : 'सक्रिय'))}
+                              </span>
+                              {student.isYouTubeSubscribed && (
+                                <span className="inline-flex items-center gap-0.5 px-1 py-0.2 rounded text-[9px] font-bold bg-rose-50 dark:bg-rose-950/60 text-rose-600 dark:text-rose-400 border border-rose-200/60">
+                                  YT Subscribed
+                                </span>
+                              )}
+                            </div>
                           </td>
 
                           {/* Target Exam */}

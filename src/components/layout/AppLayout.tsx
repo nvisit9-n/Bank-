@@ -33,6 +33,7 @@ import { StudentProfileModal } from '../StudentProfileModal';
 import { LoginModal } from '../auth/LoginModal';
 import { MASTER_ADMIN_PIN } from '../../utils/sanitizer';
 import { PWAInstallPrompt } from '../pwa/PWAInstallPrompt';
+import { TimedYouTubePopupModal } from '../modals/TimedYouTubePopupModal';
 
 export interface AppLayoutProps {
   onLogout?: () => void;
@@ -170,6 +171,9 @@ export const AppLayout: React.FC<AppLayoutProps> = () => {
           customMessage={loginModalMessage}
         />
       )}
+
+      {/* 2-Day Timed Auto-Appearing YouTube Subscribe & PDF Unlock Gateway */}
+      <TimedYouTubePopupModal />
 
     </div>
   );

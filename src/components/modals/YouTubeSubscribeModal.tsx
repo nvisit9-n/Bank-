@@ -36,7 +36,7 @@ export const YouTubeSubscribeModal: React.FC<YouTubeSubscribeModalProps> = ({
 
   const handleCompleteUnlock = useCallback(() => {
     setIsChecking(true);
-    YouTubeSubscriptionGate.unlock(user?.email || user?.id);
+    YouTubeSubscriptionGate.completeAndUnlock(user?.email || user?.id);
 
     // Track activity in user logs
     try {

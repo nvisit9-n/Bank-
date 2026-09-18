@@ -276,9 +276,13 @@ export const fetchOfficialChannelVideos = async (forceRefresh = false): Promise<
 };
 
 // ==========================================
-// YOUTUBE SUBSCRIPTION GATE FOR PDF EXPORT
+// YOUTUBE SUBSCRIPTION GATE & TIMED POPUP GATEWAY
 // ==========================================
 export const YOUTUBE_UNLOCK_STORAGE_KEY = 'btn_youtube_unlocked_status_v1';
+export const YOUTUBE_POPUP_FIRST_SEEN_KEY = 'btn_yt_popup_first_seen_v1';
+export const YOUTUBE_POPUP_COMPLETED_KEY = 'btn_yt_popup_completed_v1';
+export const YOUTUBE_POPUP_DISMISSED_SESSION_KEY = 'btn_yt_popup_dismissed_session_v1';
+export const POPUP_ACTIVE_WINDOW_MS = 2 * 24 * 60 * 60 * 1000; // 48 hours (2 days)
 
 export class YouTubeSubscriptionGate {
   /**
@@ -289,6 +293,10 @@ export class YouTubeSubscriptionGate {
       if (typeof window === 'undefined') return false;
       const stored = localStorage.getItem(YOUTUBE_UNLOCK_STORAGE_KEY);
       if (stored === 'true' || stored === 'unlocked') return true;
+
+      // Check completion token
+      const completedToken = localStorage.getItem(YOUTUBE_POPUP_COMPLETED_KEY);
+      if (completedToken === 'true') return true;
 
       // Check current user profile cache if available
       const cachedUser = localStorage.getItem('loksewa_user_profile');
@@ -303,12 +311,108 @@ export class YouTubeSubscriptionGate {
   }
 
   /**
+   * Check whether the 2-day timed popup should auto-appear when user visits
+   */
+  static isTimedPopupEligible(): boolean {
+    try {
+      if (typeof window === 'undefined') return false;
+
+      // If user already subscribed/unlocked or completed action, do not show
+      if (this.isUnlocked()) return false;
+
+      const completed = localStorage.getItem(YOUTUBE_POPUP_COMPLETED_KEY);
+      if (completed === 'true') return false;
+
+      // Check session dismissal (do not pop up repeatedly in the exact same browsing session)
+      const sessionDismissed = sessionStorage.getItem(YOUTUBE_POPUP_DISMISSED_SESSION_KEY);
+      if (sessionDismissed === 'true') return false;
+
+      // Check the 2-day time window
+      let firstSeen = localStorage.getItem(YOUTUBE_POPUP_FIRST_SEEN_KEY);
+      const now = Date.now();
+
+      if (!firstSeen) {
+        // First time seeing the prompt, record timestamp
+        localStorage.setItem(YOUTUBE_POPUP_FIRST_SEEN_KEY, now.toString());
+        return true;
+      }
+
+      const firstSeenTime = parseInt(firstSeen, 10);
+      if (isNaN(firstSeenTime)) {
+        localStorage.setItem(YOUTUBE_POPUP_FIRST_SEEN_KEY, now.toString());
+        return true;
+      }
+
+      const elapsed = now - firstSeenTime;
+      if (elapsed > POPUP_ACTIVE_WINDOW_MS) {
+        // 2 days have elapsed - automatically deactivates and hides permanently
+        return false;
+      }
+
+      return true;
+    } catch {
+      return false;
+    }
+  }
+
+  /**
+   * Get remaining time in the 2-day active window
+   */
+  static getTimeRemaining(): { hours: number; minutes: number; expired: boolean } {
+    try {
+      const firstSeen = localStorage.getItem(YOUTUBE_POPUP_FIRST_SEEN_KEY);
+      if (!firstSeen) {
+        return { hours: 48, minutes: 0, expired: false };
+      }
+      const firstSeenTime = parseInt(firstSeen, 10);
+      const now = Date.now();
+      const elapsed = now - firstSeenTime;
+      const remainingMs = POPUP_ACTIVE_WINDOW_MS - elapsed;
+
+      if (remainingMs <= 0) {
+        return { hours: 0, minutes: 0, expired: true };
+      }
+
+      const totalMinutes = Math.floor(remainingMs / (1000 * 60));
+      const hours = Math.floor(totalMinutes / 60);
+      const minutes = totalMinutes % 60;
+      return { hours, minutes, expired: false };
+    } catch {
+      return { hours: 48, minutes: 0, expired: false };
+    }
+  }
+
+  /**
+   * Dismiss the timed popup for the current session
+   */
+  static dismissForSession(): void {
+    try {
+      if (typeof window !== 'undefined') {
+        sessionStorage.setItem(YOUTUBE_POPUP_DISMISSED_SESSION_KEY, 'true');
+      }
+    } catch {}
+  }
+
+  /**
+   * Complete the subscription & unlock action via popup
+   */
+  static completeAndUnlock(userEmailOrUid?: string): void {
+    try {
+      if (typeof window !== 'undefined') {
+        localStorage.setItem(YOUTUBE_POPUP_COMPLETED_KEY, 'true');
+      }
+      this.unlock(userEmailOrUid);
+    } catch {}
+  }
+
+  /**
    * Unlock PDF downloads once YouTube subscription link is visited
    */
   static unlock(userEmailOrUid?: string): void {
     try {
       localStorage.setItem(YOUTUBE_UNLOCK_STORAGE_KEY, 'true');
       localStorage.setItem('btn_youtube_unlocked_timestamp', new Date().toISOString());
+      localStorage.setItem(YOUTUBE_POPUP_COMPLETED_KEY, 'true');
 
       // Update local user profile if present
       const cachedUser = localStorage.getItem('loksewa_user_profile');
