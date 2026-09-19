@@ -32,6 +32,10 @@ export interface AdminRegisteredUser {
   pagesVisited?: string[];
   lastPageVisited?: string;
   isYouTubeSubscribed?: boolean;
+  totalLogins?: number;
+  testsTaken?: number;
+  device?: string;
+  browser?: string;
 }
 
 export interface AdminExamRecord {
@@ -102,7 +106,8 @@ export class AdminAnalyticsService {
   }
 
   /**
-   * Real-time listener for registered and logged-in users from Firebase RTDB and Firestore
+   * Real-time listener for registered and logged-in users from Firebase Firestore `registered_users`,
+   * Firestore `users`, Realtime Database, and the backend server database table.
    */
   static subscribeToRegisteredUsers(
     onUpdate: (users: AdminRegisteredUser[]) => void
@@ -110,31 +115,39 @@ export class AdminAnalyticsService {
     let isUnsubscribed = false;
     let rtdbUsers: AdminRegisteredUser[] = [];
     let firestoreUsers: AdminRegisteredUser[] = [];
+    let firestoreRegUsers: AdminRegisteredUser[] = [];
+    let serverUsers: AdminRegisteredUser[] = [];
 
-    // Load local baseline first
+    // Baseline from local real profile (no mock defaults)
     const getLocalBaseline = (): AdminRegisteredUser[] => {
       try {
         const localStudents = DbService.getAllRegisteredStudents();
-        return localStudents.map(s => ({
-          id: s.id || s.authUid || `user-${Date.now()}`,
-          authUid: s.authUid || s.id || '',
-          displayName: s.displayName || s.name || 'विद्यार्थी',
-          email: s.email || '',
-          registrationDate: s.registeredAt || new Date().toISOString(),
-          lastActive: s.lastActiveDate || s.registeredAt || new Date().toISOString(),
-          totalXp: s.xp || 150,
-          quizzesCompleted: s.quizzesCompleted || 0,
-          questionsSolved: s.questionsSolved || 0,
-          targetExam: s.targetExam || 'नेपाल राष्ट्र बैंक - सहायक ४',
-          district: s.district || 'काठमाडौं',
-          province: s.province || 'बागमती प्रदेश',
-          photoURL: s.photoURL || s.avatarUrl || '',
-          isPro: Boolean(s.isPro || s.isProUser),
-          entryStatus: s.entryStatus || (s.isPro ? 'प्रो सक्रिय' : (s.email?.includes('@gmail.com') ? 'Google प्रमाणीकृत' : 'सक्रिय')),
-          pagesVisited: s.pagesVisited?.length ? s.pagesVisited : ['गृहपृष्ठ', '५० सेटहरू', 'सङ्गठित संस्था'],
-          lastPageVisited: s.lastPageVisited || 'सङ्गठित संस्था ५० सेटहरू',
-          isYouTubeSubscribed: s.isYouTubeSubscribed
-        }));
+        return localStudents
+          .filter(s => s && s.email && !s.id?.startsWith('usr-stud-'))
+          .map(s => ({
+            id: s.id || s.authUid || `user-${Date.now()}`,
+            authUid: s.authUid || s.id || '',
+            displayName: s.displayName || s.name || 'विद्यार्थी',
+            email: s.email || '',
+            registrationDate: s.registeredAt || new Date().toISOString(),
+            lastActive: s.lastActiveDate || s.registeredAt || new Date().toISOString(),
+            totalXp: s.xp || 150,
+            quizzesCompleted: s.quizzesCompleted || 0,
+            questionsSolved: s.questionsSolved || 0,
+            targetExam: s.targetExam || 'नेपाल राष्ट्र बैंक - सहायक ४',
+            district: s.district || 'काठमाडौँ',
+            province: s.province || 'बागमती प्रदेश',
+            photoURL: s.photoURL || s.avatarUrl || '',
+            isPro: Boolean(s.isPro || s.isProUser),
+            entryStatus: s.entryStatus || (s.isPro ? 'प्रो सक्रिय' : (s.email?.includes('@gmail.com') ? 'Google प्रमाणीकृत' : 'सक्रिय')),
+            pagesVisited: Array.isArray(s.pagesVisited) && s.pagesVisited.length ? s.pagesVisited : ['गृहपृष्ठ', '५० सेटहरू'],
+            lastPageVisited: s.lastPageVisited || 'सङ्गठित संस्था ५० सेटहरू',
+            isYouTubeSubscribed: s.isYouTubeSubscribed,
+            totalLogins: s.totalLogins || 1,
+            testsTaken: s.quizzesCompleted || 0,
+            device: 'Desktop',
+            browser: 'Browser'
+          }));
       } catch (err) {
         console.warn('Error reading local user baseline:', err);
         return [];
@@ -155,15 +168,37 @@ export class AdminAnalyticsService {
         const key = (u.email ? u.email.toLowerCase() : u.id) || u.authUid;
         if (key) userMap.set(key, u);
       }
-      // 2. RTDB Users
-      for (const u of rtdbUsers) {
+      // 2. Server Users
+      for (const u of serverUsers) {
         const key = (u.email ? u.email.toLowerCase() : u.id) || u.authUid;
-        if (key) userMap.set(key, u);
+        if (key) {
+          const prev = userMap.get(key);
+          userMap.set(key, { ...prev, ...u });
+        }
       }
-      // 3. Firestore Users
+      // 3. Firestore registered_users (Highest authority)
+      for (const u of firestoreRegUsers) {
+        const key = (u.email ? u.email.toLowerCase() : u.id) || u.authUid;
+        if (key) {
+          const prev = userMap.get(key);
+          userMap.set(key, { ...prev, ...u });
+        }
+      }
+      // 4. Firestore users collection
       for (const u of firestoreUsers) {
         const key = (u.email ? u.email.toLowerCase() : u.id) || u.authUid;
-        if (key) userMap.set(key, u);
+        if (key) {
+          const prev = userMap.get(key);
+          userMap.set(key, { ...prev, ...u });
+        }
+      }
+      // 5. RTDB Users
+      for (const u of rtdbUsers) {
+        const key = (u.email ? u.email.toLowerCase() : u.id) || u.authUid;
+        if (key) {
+          const prev = userMap.get(key);
+          userMap.set(key, { ...prev, ...u });
+        }
       }
 
       const merged = Array.from(userMap.values()).sort((a, b) => {
@@ -172,6 +207,46 @@ export class AdminAnalyticsService {
 
       onUpdate(merged);
     };
+
+    // Fetch from Backend Server Table `/api/user-tracking/users`
+    const fetchServerUsers = async () => {
+      try {
+        const res = await fetch('/api/user-tracking/users');
+        if (res.ok) {
+          const data = await res.json();
+          if (data && Array.isArray(data.users)) {
+            serverUsers = data.users.map((u: any) => ({
+              id: u.id,
+              authUid: u.id,
+              displayName: u.displayName || u.name || (u.email ? u.email.split('@')[0] : 'विद्यार्थी'),
+              email: u.email || '',
+              registrationDate: this.parseDate(u.registeredAt || u.lastLoginAt),
+              lastActive: this.parseDate(u.lastActive || u.lastLoginAt),
+              totalXp: typeof u.totalXp === 'number' ? u.totalXp : 200,
+              quizzesCompleted: typeof u.testsTaken === 'number' ? u.testsTaken : 0,
+              questionsSolved: (u.testsTaken || 0) * 10,
+              targetExam: u.targetExam || 'नेपाल राष्ट्र बैंक - सहायक ४',
+              district: u.district || 'काठमाडौँ',
+              province: u.province || 'बागमती प्रदेश',
+              photoURL: u.photoURL || '',
+              isPro: Boolean(u.isPro),
+              entryStatus: u.entryStatus || (u.isPro ? 'प्रो सक्रिय' : (u.email?.includes('@gmail.com') ? 'Google प्रमाणीकृत' : 'सक्रिय')),
+              pagesVisited: Array.isArray(u.pagesVisited) && u.pagesVisited.length ? u.pagesVisited : ['गृहपृष्ठ', '५० सेटहरू'],
+              lastPageVisited: u.lastPageVisited || 'गृहपृष्ठ',
+              isYouTubeSubscribed: Boolean(u.isYouTubeSubscribed),
+              totalLogins: u.totalLogins || 1,
+              testsTaken: u.testsTaken || 0,
+              device: u.device || 'Desktop',
+              browser: u.browser || 'Unknown'
+            }));
+            emitMerged();
+          }
+        }
+      } catch (err) {
+        console.warn('Could not fetch server registered_users:', err);
+      }
+    };
+    fetchServerUsers();
 
     // 1. Subscribe to Firebase Realtime Database `users/` node
     let rtdbUnsub: (() => void) | null = null;
@@ -203,7 +278,11 @@ export class AdminAnalyticsService {
                 entryStatus: val.entryStatus || (val.isPro ? 'प्रो सक्रिय' : (val.email?.includes('@gmail.com') ? 'Google प्रमाणीकृत' : 'सक्रिय')),
                 pagesVisited: Array.isArray(val.pagesVisited) && val.pagesVisited.length ? val.pagesVisited : ['गृहपृष्ठ', '५० सेटहरू'],
                 lastPageVisited: val.lastPageVisited || 'सङ्गठित संस्था ५० सेटहरू',
-                isYouTubeSubscribed: val.isYouTubeSubscribed
+                isYouTubeSubscribed: val.isYouTubeSubscribed,
+                totalLogins: val.totalLogins || 1,
+                testsTaken: val.testsTaken || 0,
+                device: val.device || 'Desktop',
+                browser: val.browser || 'Browser'
               });
             });
           }
@@ -217,7 +296,55 @@ export class AdminAnalyticsService {
       console.warn('Could not attach RTDB users listener:', rtdbErr);
     }
 
-    // 2. Subscribe to Firestore `users` collection
+    // 2. Subscribe to Firestore `registered_users` collection (Explicit table requested)
+    let fsRegUnsub: (() => void) | null = null;
+    try {
+      const regCol = collection(db, 'registered_users');
+      fsRegUnsub = onSnapshot(
+        regCol,
+        (snapshot) => {
+          if (isUnsubscribed) return;
+          const list: AdminRegisteredUser[] = [];
+          snapshot.forEach((docSnap) => {
+            const data = docSnap.data();
+            const id = docSnap.id;
+            list.push({
+              id,
+              authUid: data.id || id,
+              displayName: data.displayName || data.name || (data.email ? data.email.split('@')[0] : 'विद्यार्थी'),
+              email: data.email || '',
+              registrationDate: this.parseDate(data.registeredAt || data.createdAt),
+              lastActive: this.parseDate(data.lastActive || data.lastLoginAt),
+              totalXp: typeof data.totalXp === 'number' ? data.totalXp : 200,
+              quizzesCompleted: typeof data.testsTaken === 'number' ? data.testsTaken : (data.quizzesCompleted || 0),
+              questionsSolved: typeof data.questionsSolved === 'number' ? data.questionsSolved : 0,
+              targetExam: data.targetExam || 'नेपाल राष्ट्र बैंक - सहायक ४',
+              district: data.district || 'काठमाडौँ',
+              province: data.province || 'बागमती प्रदेश',
+              photoURL: data.photoURL || '',
+              isPro: Boolean(data.isPro),
+              entryStatus: data.entryStatus || (data.isPro ? 'प्रो सक्रिय' : (data.email?.includes('@gmail.com') ? 'Google प्रमाणीकृत' : 'सक्रिय')),
+              pagesVisited: Array.isArray(data.pagesVisited) && data.pagesVisited.length ? data.pagesVisited : ['गृहपृष्ठ', '५० सेटहरू'],
+              lastPageVisited: data.lastPageVisited || 'गृहपृष्ठ',
+              isYouTubeSubscribed: Boolean(data.isYouTubeSubscribed),
+              totalLogins: data.totalLogins || 1,
+              testsTaken: data.testsTaken || 0,
+              device: data.device || 'Desktop',
+              browser: data.browser || 'Unknown'
+            });
+          });
+          firestoreRegUsers = list;
+          emitMerged();
+        },
+        (error) => {
+          console.warn('Firestore registered_users subscription notice:', error.message);
+        }
+      );
+    } catch (err) {
+      console.warn('Could not attach Firestore registered_users snapshot:', err);
+    }
+
+    // 3. Subscribe to Firestore `users` collection
     let fsUnsub: (() => void) | null = null;
     try {
       const usersCol = collection(db, 'users');
@@ -247,7 +374,11 @@ export class AdminAnalyticsService {
               entryStatus: data.entryStatus || (data.isPro ? 'प्रो सक्रिय' : (data.email?.includes('@gmail.com') ? 'Google प्रमाणीकृत' : 'सक्रिय')),
               pagesVisited: Array.isArray(data.pagesVisited) && data.pagesVisited.length ? data.pagesVisited : ['गृहपृष्ठ', '५० सेटहरू'],
               lastPageVisited: data.lastPageVisited || 'सङ्गठित संस्था ५० सेटहरू',
-              isYouTubeSubscribed: data.isYouTubeSubscribed
+              isYouTubeSubscribed: data.isYouTubeSubscribed,
+              totalLogins: data.totalLogins || 1,
+              testsTaken: data.testsTaken || 0,
+              device: data.device || 'Desktop',
+              browser: data.browser || 'Browser'
             });
           });
           firestoreUsers = list;
@@ -264,6 +395,7 @@ export class AdminAnalyticsService {
     return () => {
       isUnsubscribed = true;
       if (typeof rtdbUnsub === 'function') rtdbUnsub();
+      if (typeof fsRegUnsub === 'function') fsRegUnsub();
       if (typeof fsUnsub === 'function') fsUnsub();
     };
   }

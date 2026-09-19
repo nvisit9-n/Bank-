@@ -20,7 +20,10 @@ import {
   CheckSquare,
   ChevronRight,
   TrendingUp,
-  UserCheck
+  UserCheck,
+  Eye,
+  Laptop,
+  Smartphone
 } from 'lucide-react';
 import { useApp } from '../../context/AppContext';
 import { 
@@ -31,12 +34,16 @@ import {
   AdminSummaryMetrics 
 } from '../../services/adminAnalyticsService';
 import { isOwnerAdmin, PRIMARY_OWNER_EMAIL, BACKUP_ADMIN_EMAIL, isExcludedAdminActivity } from '../../utils/sanitizer';
+import { UserDetailModal } from './UserDetailModal';
 
 export const AdminAnalyticsDashboard: React.FC = () => {
   const { user, setActiveTab, addToast } = useApp();
 
   // Active sub-view in Admin Analytics
   const [activeSubTab, setActiveSubTab] = useState<'exams' | 'users' | 'notes'>('exams');
+
+  // Selected User for Detail View Timeline Modal
+  const [selectedUserForDetail, setSelectedUserForDetail] = useState<AdminRegisteredUser | null>(null);
 
   // Live Firestore data
   const [registeredUsers, setRegisteredUsers] = useState<AdminRegisteredUser[]>([]);
@@ -201,7 +208,65 @@ export const AdminAnalyticsDashboard: React.FC = () => {
   }, [notesActivities, searchQuery, includeAdmins]);
 
   // Export Table Data to CSV
-  const handleExportCSV = () => {
+  const handleExportCSV = async () => {
+    // 1. If on Registered Users tab: Export full live user database
+    if (activeSubTab === 'users') {
+      try {
+        const res = await fetch('/api/user-tracking/export-csv');
+        if (res.ok) {
+          const blob = await res.blob();
+          const url = window.URL.createObjectURL(blob);
+          const link = document.createElement('a');
+          link.href = url;
+          link.download = `registered_students_database_${new Date().toISOString().split('T')[0]}.csv`;
+          document.body.appendChild(link);
+          link.click();
+          document.body.removeChild(link);
+          window.URL.revokeObjectURL(url);
+          addToast('डाटाबेसबाट सम्पूर्ण विद्यार्थी CSV सफलतापुर्वक डाउनलोड भयो।', 'success');
+          return;
+        }
+      } catch (e) {
+        console.warn('Backend CSV export fallback:', e);
+      }
+
+      // Fallback from live state
+      if (filteredUsers.length === 0) {
+        addToast('डाउनलोड गर्नका लागि कुनै विद्यार्थी डाटा भेटिएन।', 'warning');
+        return;
+      }
+      const userHeaders = ['ID', 'Student Name', 'Email Address', 'District', 'Target Exam', 'Total Logins', 'Pages Visited', 'Tests Taken', 'YouTube Subscribed', 'Device', 'Browser', 'Last Active Time', 'Registration Date'];
+      const userRows = filteredUsers.map(u => [
+        `"${u.id}"`,
+        `"${(u.displayName || '').replace(/"/g, '""')}"`,
+        `"${(u.email || '').replace(/"/g, '""')}"`,
+        `"${(u.district || '').replace(/"/g, '""')}"`,
+        `"${(u.targetExam || '').replace(/"/g, '""')}"`,
+        u.totalLogins || 1,
+        `"${(u.pagesVisited || []).join('; ').replace(/"/g, '""')}"`,
+        u.testsTaken || u.quizzesCompleted || 0,
+        u.isYouTubeSubscribed ? 'Yes' : 'No',
+        `"${u.device || 'Desktop'}"`,
+        `"${u.browser || 'Browser'}"`,
+        `"${new Date(u.lastActive).toLocaleString()}"`,
+        `"${new Date(u.registrationDate).toLocaleString()}"`
+      ]);
+
+      const csvContent = [userHeaders.join(','), ...userRows.map(r => r.join(','))].join('\n');
+      const blob = new Blob([csvContent], { type: 'text/csv;charset=utf-8;' });
+      const url = URL.createObjectURL(blob);
+      const link = document.createElement('a');
+      link.href = url;
+      link.download = `registered_students_database_${new Date().toISOString().split('T')[0]}.csv`;
+      document.body.appendChild(link);
+      link.click();
+      document.body.removeChild(link);
+      URL.revokeObjectURL(url);
+      addToast('विद्यार्थी डाटाबेस CSV सफलतापूर्वक डाउनलोड भयो।', 'success');
+      return;
+    }
+
+    // 2. If on Exams tab
     if (filteredExams.length === 0) {
       addToast('डाउनलोड गर्नका लागि कुनै डाटा भेटिएन।', 'warning');
       return;
@@ -224,10 +289,11 @@ export const AdminAnalyticsDashboard: React.FC = () => {
     const url = URL.createObjectURL(blob);
     const link = document.createElement('a');
     link.setAttribute('href', url);
-    link.setAttribute('download', `owner_admin_analytics_${new Date().toISOString().split('T')[0]}.csv`);
+    link.setAttribute('download', `exam_records_${new Date().toISOString().split('T')[0]}.csv`);
     document.body.appendChild(link);
     link.click();
     document.body.removeChild(link);
+    URL.revokeObjectURL(url);
     addToast('एक्जाम एनालिटिक्स CSV सफलतापूर्वक डाउनलोड भयो।', 'success');
   };
 
@@ -674,22 +740,32 @@ export const AdminAnalyticsDashboard: React.FC = () => {
           )}
 
           {/* =========================================================================
-              VIEW 2: REGISTERED USERS DIRECTORY
-              (Display Name, Email, Registration Date, Last Active, Total XP)
+              VIEW 2: REGISTERED USERS DIRECTORY & TRACKING TABLE
+              Columns: Name | Email | Total Logins | Pages Visited | Exam Activity | YouTube Subscribed Status | Last Active Time
               ========================================================================= */}
           {activeSubTab === 'users' && (
             <div className="p-4 sm:p-5">
-              <div className="overflow-x-auto rounded-xl border border-slate-200 dark:border-slate-800">
+              <div className="flex items-center justify-between mb-3 text-xs text-slate-500 dark:text-slate-400">
+                <span className="flex items-center gap-1.5 font-medium">
+                  <Eye className="w-3.5 h-3.5 text-amber-500" />
+                  कुनै पनि विद्यार्थीको पङ्क्तिमा क्लिक गरी विस्तृत गतिविधि टाइमलाइन हेर्नुहोस्:
+                </span>
+                <span className="font-semibold text-slate-700 dark:text-slate-300">
+                  कुल विद्यार्थी: {filteredUsers.length}
+                </span>
+              </div>
+
+              <div className="overflow-x-auto rounded-xl border border-slate-200 dark:border-slate-800 shadow-sm">
                 <table className="w-full text-left text-xs border-collapse">
                   <thead>
                     <tr className="bg-slate-100 dark:bg-slate-800/80 text-slate-700 dark:text-slate-300 font-bold border-b border-slate-200 dark:border-slate-700">
-                      <th className="py-3 px-4">विद्यार्थी (Display Name)</th>
-                      <th className="py-3 px-4">इमेल ठेगाना (Email)</th>
-                      <th className="py-3 px-4">लक्षित परीक्षा (Target Exam)</th>
-                      <th className="py-3 px-4 text-center">कुल XP (Total XP)</th>
-                      <th className="py-3 px-4 text-center">सम्पन्न क्विज</th>
-                      <th className="py-3 px-4">दर्ता मिति (Registration Date)</th>
-                      <th className="py-3 px-4 text-right">अन्तिम सक्रियता (Last Active)</th>
+                      <th className="py-3 px-4">Student Name (नाम)</th>
+                      <th className="py-3 px-4">Email Address (इमेल)</th>
+                      <th className="py-3 px-4 text-center">Total Logins (लगइन)</th>
+                      <th className="py-3 px-4">Pages Visited (भ्रमण पृष्ठहरू)</th>
+                      <th className="py-3 px-4 text-center">Exam Activity (परीक्षा)</th>
+                      <th className="py-3 px-4 text-center">YouTube Subscribed</th>
+                      <th className="py-3 px-4 text-right">Last Active Time (समय)</th>
                     </tr>
                   </thead>
                   <tbody className="divide-y divide-slate-200 dark:divide-slate-800 text-slate-700 dark:text-slate-300">
@@ -703,40 +779,46 @@ export const AdminAnalyticsDashboard: React.FC = () => {
                       filteredUsers.map((student) => (
                         <tr 
                           key={student.id}
-                          className="hover:bg-slate-50/80 dark:hover:bg-slate-800/50 transition-colors"
+                          onClick={() => setSelectedUserForDetail(student)}
+                          className="hover:bg-amber-50/50 dark:hover:bg-slate-800/70 transition-colors cursor-pointer group"
                         >
-                          {/* Name & Avatar */}
+                          {/* 1. Student Name */}
                           <td className="py-3 px-4 font-bold text-slate-900 dark:text-white">
                             <div className="flex items-center space-x-2.5">
                               {student.photoURL ? (
                                 <img 
                                   src={student.photoURL} 
                                   alt="" 
-                                  className="w-7 h-7 rounded-full object-cover shrink-0" 
+                                  className="w-8 h-8 rounded-full object-cover shrink-0 ring-1 ring-amber-400/40" 
                                   referrerPolicy="no-referrer"
                                 />
                               ) : (
-                                <div className="w-7 h-7 rounded-full bg-amber-500/20 text-amber-500 font-bold text-xs flex items-center justify-center shrink-0">
+                                <div className="w-8 h-8 rounded-full bg-amber-500/20 text-amber-500 font-bold text-xs flex items-center justify-center shrink-0 border border-amber-500/30">
                                   {student.displayName.charAt(0) || 'U'}
                                 </div>
                               )}
                               <div>
-                                <span className="block truncate max-w-[170px]" title={student.displayName}>
+                                <span className="block truncate max-w-[170px] group-hover:text-amber-600 dark:group-hover:text-amber-400 transition-colors" title={student.displayName}>
                                   {student.displayName}
                                 </span>
-                                {student.district && (
-                                  <span className="text-[10px] text-slate-400 font-normal">
-                                    {student.district}
-                                  </span>
-                                )}
+                                <div className="flex items-center gap-1.5 text-[10px] text-slate-400 font-normal">
+                                  {student.district && <span>{student.district}</span>}
+                                  {student.targetExam && (
+                                    <span className="truncate max-w-[120px]" title={student.targetExam}>
+                                      • {student.targetExam}
+                                    </span>
+                                  )}
+                                </div>
                               </div>
                             </div>
                           </td>
 
-                          {/* Email & Status */}
+                          {/* 2. Email Address & Device */}
                           <td className="py-3 px-4 font-mono text-[11px] text-slate-600 dark:text-slate-400">
-                            <div>{student.email || <span className="italic text-slate-400">अतिथि (Guest)</span>}</div>
-                            <div className="flex items-center gap-1.5 mt-1">
+                            <div className="font-semibold text-slate-800 dark:text-slate-200">
+                              {student.email || <span className="italic text-slate-400">अतिथि (Guest)</span>}
+                            </div>
+                            <div className="flex items-center gap-1.5 mt-1 flex-wrap">
                               <span className={`inline-flex items-center gap-1 px-1.5 py-0.2 rounded text-[9px] font-bold ${
                                 student.isPro
                                   ? 'bg-amber-100 dark:bg-amber-950/80 text-amber-700 dark:text-amber-300'
@@ -747,45 +829,91 @@ export const AdminAnalyticsDashboard: React.FC = () => {
                                 <span className="w-1 h-1 rounded-full bg-current"></span>
                                 {student.entryStatus || (student.isPro ? 'प्रो सक्रिय' : (student.email?.includes('@gmail.com') ? 'Google प्रमाणीकृत' : 'सक्रिय'))}
                               </span>
-                              {student.isYouTubeSubscribed && (
-                                <span className="inline-flex items-center gap-0.5 px-1 py-0.2 rounded text-[9px] font-bold bg-rose-50 dark:bg-rose-950/60 text-rose-600 dark:text-rose-400 border border-rose-200/60">
-                                  YT Subscribed
+                              {(student.device || student.browser) && (
+                                <span className="text-[9px] text-slate-400 font-mono bg-slate-100 dark:bg-slate-800 px-1 py-0.2 rounded">
+                                  {student.device || 'Desktop'}
                                 </span>
                               )}
                             </div>
                           </td>
 
-                          {/* Target Exam */}
-                          <td className="py-3 px-4 text-slate-700 dark:text-slate-300 text-[11px]">
-                            <span className="truncate max-w-[190px] block" title={student.targetExam}>
-                              {student.targetExam || 'नेपाल राष्ट्र बैंक - सहायक ४'}
-                            </span>
-                          </td>
-
-                          {/* Total XP */}
+                          {/* 3. Total Logins */}
                           <td className="py-3 px-4 text-center">
-                            <span className="px-2 py-0.5 rounded-full bg-amber-100 dark:bg-amber-950/80 text-amber-800 dark:text-amber-300 font-bold text-[11px] inline-flex items-center gap-1">
-                              <Sparkles className="w-3 h-3" />
-                              {student.totalXp} XP
+                            <span className="inline-flex items-center px-2.5 py-1 rounded-lg bg-blue-50 dark:bg-blue-950/60 text-blue-700 dark:text-blue-300 font-black text-xs font-mono border border-blue-200/50 dark:border-blue-800/50">
+                              {student.totalLogins || 1}
                             </span>
                           </td>
 
-                          {/* Quizzes Completed */}
-                          <td className="py-3 px-4 text-center font-semibold text-slate-600 dark:text-slate-400">
-                            {student.quizzesCompleted}
+                          {/* 4. Pages Visited */}
+                          <td className="py-3 px-4">
+                            {student.pagesVisited && student.pagesVisited.length > 0 ? (
+                              <div className="flex items-center gap-1 flex-wrap max-w-[220px]">
+                                {student.pagesVisited.slice(0, 3).map((page, pIdx) => (
+                                  <span 
+                                    key={pIdx}
+                                    className="px-1.5 py-0.5 rounded bg-slate-100 dark:bg-slate-800 text-slate-700 dark:text-slate-300 text-[10px] font-medium"
+                                  >
+                                    {page}
+                                  </span>
+                                ))}
+                                {student.pagesVisited.length > 3 && (
+                                  <span className="text-[10px] text-slate-400 font-semibold">
+                                    +{student.pagesVisited.length - 3}
+                                  </span>
+                                )}
+                              </div>
+                            ) : (
+                              <span className="text-slate-400 italic text-[10px]">गृहपृष्ठ / दर्ता</span>
+                            )}
                           </td>
 
-                          {/* Registration Date */}
-                          <td className="py-3 px-4 text-slate-500 dark:text-slate-400 text-[11px]">
-                            {new Date(student.registrationDate).toLocaleDateString()}
+                          {/* 5. Exam Activity */}
+                          <td className="py-3 px-4 text-center">
+                            <div className="inline-flex flex-col items-center">
+                              <span className="font-bold text-emerald-700 dark:text-emerald-300 bg-emerald-50 dark:bg-emerald-950/60 px-2 py-0.5 rounded text-[11px]">
+                                {student.testsTaken || student.quizzesCompleted || 0} सम्पन्न
+                              </span>
+                              {student.totalXp > 0 && (
+                                <span className="text-[10px] text-amber-600 dark:text-amber-400 font-semibold mt-0.5 flex items-center gap-0.5">
+                                  <Sparkles className="w-2.5 h-2.5" />
+                                  {student.totalXp} XP
+                                </span>
+                              )}
+                            </div>
                           </td>
 
-                          {/* Last Active */}
-                          <td className="py-3 px-4 text-right text-slate-500 dark:text-slate-400 text-[11px]">
-                            {new Date(student.lastActive).toLocaleDateString()}
-                            <span className="block text-[10px] text-slate-400 font-mono">
+                          {/* 6. YouTube Subscribed Status */}
+                          <td className="py-3 px-4 text-center">
+                            {student.isYouTubeSubscribed ? (
+                              <span className="inline-flex items-center gap-1 px-2 py-0.5 rounded-full text-[10px] font-bold bg-rose-100 dark:bg-rose-950/80 text-rose-700 dark:text-rose-300 border border-rose-300/60 shadow-xs">
+                                <span className="text-rose-600 dark:text-rose-400">✓</span>
+                                <span>Subscribed</span>
+                              </span>
+                            ) : (
+                              <span className="inline-flex items-center px-2 py-0.5 rounded-full text-[10px] font-medium bg-slate-100 dark:bg-slate-800 text-slate-500 dark:text-slate-400 border border-slate-200 dark:border-slate-700">
+                                बाँकी (Pending)
+                              </span>
+                            )}
+                          </td>
+
+                          {/* 7. Last Active Time & Action Button */}
+                          <td className="py-3 px-4 text-right">
+                            <div className="text-slate-700 dark:text-slate-300 text-[11px] font-medium">
+                              {new Date(student.lastActive).toLocaleDateString('ne-NP', {
+                                year: 'numeric',
+                                month: 'short',
+                                day: 'numeric'
+                              })}
+                            </div>
+                            <div className="text-[10px] text-slate-400 font-mono">
                               {new Date(student.lastActive).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })}
-                            </span>
+                            </div>
+                            <div className="mt-1 flex items-center justify-end">
+                              <span className="inline-flex items-center gap-1 text-[10px] font-bold text-amber-600 dark:text-amber-400 group-hover:underline">
+                                <Eye className="w-3 h-3" />
+                                <span>टाइमलाइन</span>
+                              </span>
+                            </div>
                           </td>
                         </tr>
                       ))
@@ -883,6 +1011,14 @@ export const AdminAnalyticsDashboard: React.FC = () => {
         </div>
 
       </div>
+
+      {/* User Step-by-Step Activity Timeline Detail Modal */}
+      {selectedUserForDetail && (
+        <UserDetailModal
+          user={selectedUserForDetail}
+          onClose={() => setSelectedUserForDetail(null)}
+        />
+      )}
     </div>
   );
 };

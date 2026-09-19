@@ -983,153 +983,20 @@ export class DbService {
       if (stored) {
         const parsed = JSON.parse(stored);
         if (Array.isArray(parsed) && parsed.length > 0) {
-          return parsed;
+          // Filter out mock student IDs
+          const realOnly = parsed.filter(p => p && p.email && !p.id?.startsWith('usr-stud-'));
+          if (realOnly.length > 0) {
+            return realOnly;
+          }
         }
       }
     } catch {}
     
     const current = this.getStudentProfile();
-    const defaults: UserProfile[] = [
-      {
-        id: 'usr-stud-01',
-        authUid: 'usr-stud-01',
-        name: 'मनिष पौडेल',
-        displayName: 'मनिष पौडेल',
-        email: 'manish.paudel24@gmail.com',
-        authProvider: 'google',
-        isGoogleUser: true,
-        province: 'बागमती प्रदेश',
-        district: 'काठमाडौँ',
-        avatarUrl: 'https://images.unsplash.com/photo-1534528741775-53994a69daeb?auto=format&fit=crop&w=200&q=80',
-        xp: 3950,
-        level: 6,
-        streak: 24,
-        lastActiveDate: new Date().toISOString().split('T')[0],
-        lastLoginAt: new Date().toISOString(),
-        totalLogins: 42,
-        questionsSolved: 390,
-        quizzesCompleted: 40,
-        accuracy: 92,
-        rank: 'तह ५: वरिष्ठ अभ्यासकर्ता',
-        targetExam: 'नेपाल राष्ट्र बैंक - सहायक ४',
-        registeredAt: '2026-07-01T00:00:00.000Z',
-        isRegistered: true,
-        isGuest: false,
-        isPro: true
-      },
-      {
-        id: 'usr-stud-02',
-        authUid: 'usr-stud-02',
-        name: 'सुमन अधिकारी',
-        displayName: 'सुमन अधिकारी',
-        email: 'suman.adhikari@gmail.com',
-        authProvider: 'google',
-        isGoogleUser: true,
-        province: 'बागमती प्रदेश',
-        district: 'काठमाडौँ',
-        avatarUrl: 'https://images.unsplash.com/photo-1507003211169-0a1dd7228f2d?auto=format&fit=crop&w=200&q=80',
-        xp: 2850,
-        level: 5,
-        streak: 15,
-        lastActiveDate: new Date().toISOString().split('T')[0],
-        lastLoginAt: new Date(Date.now() - 3600000 * 2).toISOString(),
-        totalLogins: 26,
-        questionsSolved: 310,
-        quizzesCompleted: 34,
-        accuracy: 89,
-        rank: 'तह ५: Aspirant Master',
-        targetExam: 'नेपाल राष्ट्र बैंक (NRB)',
-        registeredAt: '2026-08-10T00:00:00.000Z',
-        isRegistered: true,
-        isGuest: false,
-        isPro: true
-      },
-      {
-        id: 'usr-stud-03',
-        authUid: 'usr-stud-03',
-        name: 'प्रविण घिमिरे',
-        displayName: 'प्रविण घिमिरे',
-        email: 'pravin.ghimire@outlook.com',
-        authProvider: 'email',
-        isGoogleUser: false,
-        province: 'कोशी प्रदेश',
-        district: 'मोरङ',
-        avatarUrl: 'https://images.unsplash.com/photo-1500648767791-00dcc994a43e?auto=format&fit=crop&w=200&q=80',
-        xp: 2180,
-        level: 4,
-        streak: 9,
-        lastActiveDate: new Date().toISOString().split('T')[0],
-        lastLoginAt: new Date(Date.now() - 3600000 * 6).toISOString(),
-        totalLogins: 19,
-        questionsSolved: 245,
-        quizzesCompleted: 25,
-        accuracy: 86,
-        rank: 'तह ४: Senior Aspirant',
-        targetExam: 'राष्ट्रिय वाणिज्य बैंक (RBB)',
-        registeredAt: '2026-08-14T00:00:00.000Z',
-        isRegistered: true,
-        isGuest: false,
-        isPro: false
-      },
-      {
-        id: 'usr-stud-04',
-        authUid: 'usr-stud-04',
-        name: 'आस्मा न्यौपाने',
-        displayName: 'आस्मा न्यौपाने',
-        email: 'aasma.neupane@gmail.com',
-        authProvider: 'google',
-        isGoogleUser: true,
-        province: 'गण्डकी प्रदेश',
-        district: 'कास्की',
-        avatarUrl: 'https://images.unsplash.com/photo-1573496359142-b8d87734a5a2?auto=format&fit=crop&w=200&q=80',
-        xp: 1940,
-        level: 4,
-        streak: 11,
-        lastActiveDate: new Date().toISOString().split('T')[0],
-        lastLoginAt: new Date(Date.now() - 3600000 * 12).toISOString(),
-        totalLogins: 17,
-        questionsSolved: 212,
-        quizzesCompleted: 22,
-        accuracy: 88,
-        rank: 'तह ४: Aspirant Pro',
-        targetExam: 'कृषि विकास बैंक (ADBL)',
-        registeredAt: '2026-08-18T00:00:00.000Z',
-        isRegistered: true,
-        isGuest: false,
-        isPro: false
-      },
-      {
-        id: 'usr-stud-05',
-        authUid: 'usr-stud-05',
-        name: 'दिनेश शर्मा',
-        displayName: 'दिनेश शर्मा',
-        email: 'dinesh.sharma@gmail.com',
-        authProvider: 'email',
-        isGoogleUser: false,
-        province: 'लुम्बिनी प्रदेश',
-        district: 'रुपन्देही',
-        avatarUrl: 'https://images.unsplash.com/photo-1472099645785-5658abf4ff4e?auto=format&fit=crop&w=200&q=80',
-        xp: 1450,
-        level: 3,
-        streak: 6,
-        lastActiveDate: new Date().toISOString().split('T')[0],
-        lastLoginAt: new Date(Date.now() - 3600000 * 24).toISOString(),
-        totalLogins: 11,
-        questionsSolved: 160,
-        quizzesCompleted: 16,
-        accuracy: 82,
-        rank: 'तह ३: Aspirant',
-        targetExam: 'नेपाल बैंक लिमिटेड (NBL)',
-        registeredAt: '2026-08-25T00:00:00.000Z',
-        isRegistered: true,
-        isGuest: false,
-        isPro: false
-      }
-    ];
-
-    const merged = [current, ...defaults.filter(d => d.email !== current.email)];
-    safeStorage.setItem(DB_KEYS.REGISTERED_STUDENTS, JSON.stringify(merged));
-    return merged;
+    if (current && current.email && !current.isGuest) {
+      return [current];
+    }
+    return [];
   }
 
   static upsertRegisteredStudent(profile: UserProfile): void {

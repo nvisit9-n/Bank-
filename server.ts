@@ -770,6 +770,391 @@ app.get("/api/tracking/global-exam-results", (_req, res) => {
   res.json({ success: true, results: examSubmissionsList });
 });
 
+// =========================================================================
+// MANDATORY GLOBAL DATABASE TABLES: registered_users & user_activity_logs
+// Real-time backend persistence with disk storage for Admin CMS & tracking
+// =========================================================================
+const DB_DIR = path.join(process.cwd(), "data");
+if (!fs.existsSync(DB_DIR)) {
+  try {
+    fs.mkdirSync(DB_DIR, { recursive: true });
+  } catch (err) {
+    console.warn("Could not create DB_DIR:", err);
+  }
+}
+
+const TRACKING_USERS_DB_FILE = path.join(DB_DIR, "registered_users.json");
+const LOGS_DB_FILE = path.join(DB_DIR, "user_activity_logs.json");
+
+interface DbRegisteredUser {
+  id: string;
+  name: string;
+  displayName: string;
+  email: string;
+  photoURL?: string;
+  district?: string;
+  province?: string;
+  targetExam?: string;
+  totalLogins: number;
+  pagesVisited: string[];
+  lastPageVisited?: string;
+  testsTaken: number;
+  isYouTubeSubscribed: boolean;
+  lastLoginAt: string;
+  lastActive: string;
+  device: string;
+  browser: string;
+  registeredAt: string;
+  totalXp: number;
+  isPro: boolean;
+  entryStatus: string;
+}
+
+interface DbUserActivityLog {
+  id: string;
+  userId: string;
+  userName: string;
+  userEmail: string;
+  activityType: string;
+  action: string;
+  details: string;
+  page?: string;
+  device: string;
+  browser: string;
+  isYouTubeSubscribed: boolean;
+  timestamp: string;
+  metadata?: Record<string, any>;
+}
+
+// In-memory caches backed by disk
+const registeredUsersMap = new Map<string, DbRegisteredUser>();
+let userActivityLogsList: DbUserActivityLog[] = [];
+
+// Load from disk on boot
+try {
+  if (fs.existsSync(TRACKING_USERS_DB_FILE)) {
+    const raw = fs.readFileSync(TRACKING_USERS_DB_FILE, "utf-8");
+    const arr: DbRegisteredUser[] = JSON.parse(raw);
+    if (Array.isArray(arr)) {
+      for (const u of arr) {
+        const key = (u.email ? u.email.toLowerCase() : u.id) || u.id;
+        if (key) registeredUsersMap.set(key, u);
+      }
+    }
+  }
+} catch (e) {
+  console.warn("Failed to read TRACKING_USERS_DB_FILE:", e);
+}
+
+try {
+  if (fs.existsSync(LOGS_DB_FILE)) {
+    const raw = fs.readFileSync(LOGS_DB_FILE, "utf-8");
+    const arr: DbUserActivityLog[] = JSON.parse(raw);
+    if (Array.isArray(arr)) {
+      userActivityLogsList = arr.slice(0, 5000);
+    }
+  }
+} catch (e) {
+  console.warn("Failed to read LOGS_DB_FILE:", e);
+}
+
+let saveUsersTimeout: NodeJS.Timeout | null = null;
+function persistUsersToDisk() {
+  if (saveUsersTimeout) clearTimeout(saveUsersTimeout);
+  saveUsersTimeout = setTimeout(() => {
+    try {
+      const arr = Array.from(registeredUsersMap.values());
+      fs.writeFileSync(TRACKING_USERS_DB_FILE, JSON.stringify(arr, null, 2), "utf-8");
+    } catch (err) {
+      console.warn("Error saving users to disk:", err);
+    }
+  }, 300);
+}
+
+let saveLogsTimeout: NodeJS.Timeout | null = null;
+function persistLogsToDisk() {
+  if (saveLogsTimeout) clearTimeout(saveLogsTimeout);
+  saveLogsTimeout = setTimeout(() => {
+    try {
+      fs.writeFileSync(LOGS_DB_FILE, JSON.stringify(userActivityLogsList.slice(0, 5000), null, 2), "utf-8");
+    } catch (err) {
+      console.warn("Error saving logs to disk:", err);
+    }
+  }, 300);
+}
+
+// 1. Log an activity row directly to database and auto-update registered_users
+app.post("/api/user-tracking/log", (req, res) => {
+  try {
+    const b = req.body || {};
+    const userId = b.userId || (b.userEmail ? `usr-${b.userEmail.split('@')[0]}` : `guest-${Date.now()}`);
+    const email = (b.userEmail || '').trim().toLowerCase();
+    const name = b.userName || b.name || (email ? email.split('@')[0] : 'परीक्षार्थी');
+    const device = b.device || 'Desktop';
+    const browser = b.browser || 'Unknown';
+    const page = b.page || 'गृहपृष्ठ';
+    const activityType = b.activityType || 'page_view';
+    const action = b.action || b.details || 'क्रियाकलाप';
+    const details = b.details || action;
+    const isYouTubeSubscribed = Boolean(b.isYouTubeSubscribed);
+    const timestamp = b.timestamp || new Date().toISOString();
+
+    const logRecord: DbUserActivityLog = {
+      id: b.id || `act-${Date.now()}-${Math.random().toString(36).substring(2, 7)}`,
+      userId,
+      userName: name,
+      userEmail: email,
+      activityType,
+      action,
+      details,
+      page,
+      device,
+      browser,
+      isYouTubeSubscribed,
+      timestamp,
+      metadata: b.metadata || {}
+    };
+
+    userActivityLogsList.unshift(logRecord);
+    if (userActivityLogsList.length > 5000) userActivityLogsList.pop();
+    persistLogsToDisk();
+
+    // Auto-update or create registered_users entry
+    const userKey = email || userId;
+    let existing = registeredUsersMap.get(userKey);
+
+    if (!existing) {
+      const isGoogle = email.includes('@gmail.com');
+      existing = {
+        id: userId,
+        name,
+        displayName: name,
+        email,
+        photoURL: b.photoURL || '',
+        district: b.district || 'काठमाडौँ',
+        province: b.province || 'बागमती प्रदेश',
+        targetExam: b.targetExam || 'नेपाल राष्ट्र बैंक - सहायक ४',
+        totalLogins: activityType === 'login' ? 1 : 1,
+        pagesVisited: [page],
+        lastPageVisited: page,
+        testsTaken: activityType === 'quiz_complete' ? 1 : 0,
+        isYouTubeSubscribed,
+        lastLoginAt: activityType === 'login' ? timestamp : timestamp,
+        lastActive: timestamp,
+        device,
+        browser,
+        registeredAt: timestamp,
+        totalXp: b.totalXp || 150,
+        isPro: Boolean(b.isPro),
+        entryStatus: b.isPro ? 'प्रो सक्रिय' : (isGoogle ? 'Google प्रमाणीकृत' : 'सक्रिय')
+      };
+    } else {
+      existing.lastActive = timestamp;
+      existing.device = device;
+      existing.browser = browser;
+      if (name && name !== 'परीक्षार्थी' && existing.name === 'परीक्षार्थी') {
+        existing.name = name;
+        existing.displayName = name;
+      }
+      if (b.photoURL && !existing.photoURL) existing.photoURL = b.photoURL;
+      if (b.district && existing.district === 'काठमाडौँ') existing.district = b.district;
+      if (b.province) existing.province = b.province;
+      if (b.targetExam) existing.targetExam = b.targetExam;
+      if (b.totalXp) existing.totalXp = Math.max(existing.totalXp, b.totalXp);
+      if (b.isPro) existing.isPro = true;
+
+      if (activityType === 'login') {
+        existing.totalLogins = (existing.totalLogins || 0) + 1;
+        existing.lastLoginAt = timestamp;
+      }
+      if (activityType === 'quiz_complete') {
+        existing.testsTaken = (existing.testsTaken || 0) + 1;
+      }
+      if (isYouTubeSubscribed) {
+        existing.isYouTubeSubscribed = true;
+      }
+      if (page) {
+        if (!existing.pagesVisited) existing.pagesVisited = [];
+        if (!existing.pagesVisited.includes(page)) {
+          existing.pagesVisited.push(page);
+        }
+        existing.lastPageVisited = page;
+      }
+    }
+
+    registeredUsersMap.set(userKey, existing);
+    persistUsersToDisk();
+
+    res.json({ success: true, log: logRecord, user: existing });
+  } catch (err: any) {
+    console.warn("Error in /api/user-tracking/log:", err);
+    res.status(500).json({ success: false, error: err.message });
+  }
+});
+
+// 2. Explicitly upsert a registered_user
+app.post("/api/user-tracking/sync-user", (req, res) => {
+  try {
+    const b = req.body || {};
+    const email = (b.email || '').trim().toLowerCase();
+    const userId = b.id || b.authUid || (email ? `usr-${email.split('@')[0]}` : `guest-${Date.now()}`);
+    const userKey = email || userId;
+    const name = b.displayName || b.name || (email ? email.split('@')[0] : 'परीक्षार्थी');
+    const timestamp = new Date().toISOString();
+
+    let existing = registeredUsersMap.get(userKey);
+    const isGoogle = email.includes('@gmail.com') || b.authProvider === 'google' || Boolean(b.isGoogleUser);
+
+    if (!existing) {
+      existing = {
+        id: userId,
+        name,
+        displayName: name,
+        email,
+        photoURL: b.photoURL || b.avatarUrl || '',
+        district: b.district || 'काठमाडौँ',
+        province: b.province || 'बागमती प्रदेश',
+        targetExam: b.targetExam || 'नेपाल राष्ट्र बैंक - सहायक ४',
+        totalLogins: b.totalLogins || 1,
+        pagesVisited: Array.isArray(b.pagesVisited) && b.pagesVisited.length ? b.pagesVisited : ['गृहपृष्ठ'],
+        lastPageVisited: b.lastPageVisited || 'गृहपृष्ठ',
+        testsTaken: typeof b.testsTaken === 'number' ? b.testsTaken : (b.quizzesCompleted || 0),
+        isYouTubeSubscribed: Boolean(b.isYouTubeSubscribed),
+        lastLoginAt: b.lastLoginAt || timestamp,
+        lastActive: b.lastActive || timestamp,
+        device: b.device || 'Desktop',
+        browser: b.browser || 'Unknown',
+        registeredAt: b.registeredAt || timestamp,
+        totalXp: b.totalXp || b.xp || 150,
+        isPro: Boolean(b.isPro || b.isProUser),
+        entryStatus: b.entryStatus || (b.isPro ? 'प्रो सक्रिय' : (isGoogle ? 'Google प्रमाणीकृत' : 'सक्रिय'))
+      };
+    } else {
+      if (b.displayName) {
+        existing.displayName = b.displayName;
+        existing.name = b.displayName;
+      }
+      if (b.photoURL || b.avatarUrl) existing.photoURL = b.photoURL || b.avatarUrl;
+      if (b.district) existing.district = b.district;
+      if (b.province) existing.province = b.province;
+      if (b.targetExam) existing.targetExam = b.targetExam;
+      if (b.device) existing.device = b.device;
+      if (b.browser) existing.browser = b.browser;
+      if (b.isYouTubeSubscribed) existing.isYouTubeSubscribed = true;
+      if (b.isPro) existing.isPro = true;
+      if (typeof b.totalXp === 'number') existing.totalXp = Math.max(existing.totalXp, b.totalXp);
+      if (typeof b.testsTaken === 'number') existing.testsTaken = Math.max(existing.testsTaken, b.testsTaken);
+      if (b.isLoginEvent) {
+        existing.totalLogins = (existing.totalLogins || 0) + 1;
+        existing.lastLoginAt = timestamp;
+      }
+      if (Array.isArray(b.pagesVisited)) {
+        for (const p of b.pagesVisited) {
+          if (!existing.pagesVisited.includes(p)) existing.pagesVisited.push(p);
+        }
+      }
+      existing.lastActive = timestamp;
+    }
+
+    registeredUsersMap.set(userKey, existing);
+    persistUsersToDisk();
+
+    res.json({ success: true, user: existing });
+  } catch (err: any) {
+    console.warn("Error in /api/user-tracking/sync-user:", err);
+    res.status(500).json({ success: false, error: err.message });
+  }
+});
+
+// 3. Query all registered_users from database
+app.get(["/api/user-tracking/users", "/api/user-tracking/registered-users"], (_req, res) => {
+  const users = Array.from(registeredUsersMap.values()).sort((a, b) => {
+    return new Date(b.lastActive).getTime() - new Date(a.lastActive).getTime();
+  });
+  res.json({ success: true, count: users.length, users });
+});
+
+// 4. Query user_activity_logs (optionally filtered by userId or email)
+app.get("/api/user-tracking/logs", (req, res) => {
+  const userId = req.query.userId as string | undefined;
+  const email = (req.query.email as string | undefined)?.toLowerCase();
+  const limitParam = parseInt(req.query.limit as string, 10) || 500;
+
+  let filtered = userActivityLogsList;
+  if (email) {
+    filtered = filtered.filter(l => l.userEmail && l.userEmail.toLowerCase() === email);
+  } else if (userId) {
+    filtered = filtered.filter(l => l.userId === userId);
+  }
+
+  res.json({ success: true, count: filtered.length, logs: filtered.slice(0, limitParam) });
+});
+
+// 5. CSV export of all database records
+app.get("/api/user-tracking/export-csv", (_req, res) => {
+  try {
+    const users = Array.from(registeredUsersMap.values()).sort((a, b) => {
+      return new Date(b.lastActive).getTime() - new Date(a.lastActive).getTime();
+    });
+
+    const escapeCsv = (val: any) => {
+      if (val === undefined || val === null) return '""';
+      const str = String(val).replace(/"/g, '""');
+      return `"${str}"`;
+    };
+
+    const headers = [
+      "Student Name (नाम)",
+      "Email Address (इमेल)",
+      "Total Logins (कुल लगइन)",
+      "Pages Visited (भ्रमण गरिएका पृष्ठहरू)",
+      "Last Page Visited",
+      "Tests Taken (परीक्षा सङ्ख्या)",
+      "YouTube Subscribed (युट्युब सदस्यता)",
+      "Entry Status (प्रवेश स्थिति)",
+      "Device (उपकरण)",
+      "Browser (ब्राउजर)",
+      "District (जिल्ला)",
+      "Province (प्रदेश)",
+      "Target Exam (लक्षित परीक्षा)",
+      "Total XP (कुल अंक)",
+      "Pro License (प्रो सदस्यता)",
+      "Registration Date (दर्ता मिति)",
+      "Last Active (अन्तिम सक्रियता)"
+    ];
+
+    const rows = users.map(u => [
+      escapeCsv(u.displayName || u.name),
+      escapeCsv(u.email),
+      escapeCsv(u.totalLogins || 1),
+      escapeCsv((u.pagesVisited || []).join('; ')),
+      escapeCsv(u.lastPageVisited || ''),
+      escapeCsv(u.testsTaken || 0),
+      escapeCsv(u.isYouTubeSubscribed ? 'Subscribed & Unlocked' : 'Not Subscribed'),
+      escapeCsv(u.entryStatus || 'सक्रिय'),
+      escapeCsv(u.device || 'Desktop'),
+      escapeCsv(u.browser || 'Unknown'),
+      escapeCsv(u.district || 'काठमाडौँ'),
+      escapeCsv(u.province || 'बागमती'),
+      escapeCsv(u.targetExam || 'बैंकिङ्ग तयारी'),
+      escapeCsv(u.totalXp || 0),
+      escapeCsv(u.isPro ? 'PRO ACTIVE' : 'FREE'),
+      escapeCsv(u.registeredAt ? new Date(u.registeredAt).toLocaleString('ne-NP') : ''),
+      escapeCsv(u.lastActive ? new Date(u.lastActive).toLocaleString('ne-NP') : '')
+    ].join(','));
+
+    // UTF-8 BOM for Excel Nepali text compatibility
+    const csvContent = '\uFEFF' + [headers.join(','), ...rows].join('\r\n');
+
+    res.setHeader('Content-Type', 'text/csv; charset=utf-8');
+    res.setHeader('Content-Disposition', `attachment; filename="Banking_Tayari_Nepal_Registered_Students_${Date.now()}.csv"`);
+    res.status(200).send(csvContent);
+  } catch (err: any) {
+    console.warn("CSV export error:", err);
+    res.status(500).send(`CSV Export Failed: ${err.message}`);
+  }
+});
+
 // Sangathit Sastha 50 Sets Bulk Database APIs
 const DATA_SETS_FILE = path.join(process.cwd(), "public", "data", "allFiftySets.json");
 

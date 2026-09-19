@@ -92,12 +92,64 @@
         "timeTakenSeconds": { "type": "number" },
         "timestamp": { "type": "string" }
       }
+    },
+    "registered_users": {
+      "title": "RegisteredUser",
+      "description": "Global registered students and profile tracking records",
+      "type": "object",
+      "properties": {
+        "id": { "type": "string" },
+        "name": { "type": "string" },
+        "displayName": { "type": "string" },
+        "email": { "type": "string" },
+        "photoURL": { "type": "string" },
+        "district": { "type": "string" },
+        "province": { "type": "string" },
+        "targetExam": { "type": "string" },
+        "totalLogins": { "type": "number" },
+        "pagesVisited": { "type": "array", "items": { "type": "string" } },
+        "testsTaken": { "type": "number" },
+        "isYouTubeSubscribed": { "type": "boolean" },
+        "lastLoginAt": { "type": "string" },
+        "lastActive": { "type": "string" },
+        "device": { "type": "string" },
+        "browser": { "type": "string" },
+        "registeredAt": { "type": "string" }
+      }
+    },
+    "user_activity_logs": {
+      "title": "UserActivityLog",
+      "description": "Every page navigation, visit, quiz attempt, and YouTube subscribe click",
+      "type": "object",
+      "properties": {
+        "id": { "type": "string" },
+        "userId": { "type": "string" },
+        "userName": { "type": "string" },
+        "userEmail": { "type": "string" },
+        "activityType": { "type": "string" },
+        "action": { "type": "string" },
+        "targetTitle": { "type": "string" },
+        "details": { "type": "string" },
+        "page": { "type": "string" },
+        "device": { "type": "string" },
+        "browser": { "type": "string" },
+        "isYouTubeSubscribed": { "type": "boolean" },
+        "timestamp": { "type": "string" }
+      }
     }
   },
   "firestore": {
     "/users/{userId}": {
       "schema": "users",
       "description": "User profile collection"
+    },
+    "/registered_users/{userId}": {
+      "schema": "registered_users",
+      "description": "Global registered users table"
+    },
+    "/user_activity_logs/{logId}": {
+      "schema": "user_activity_logs",
+      "description": "Mandatory real-time user activity logs"
     },
     "/analytics/{docId}": {
       "schema": "analytics",

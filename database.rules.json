@@ -31,6 +31,14 @@
       ".read": true,
       ".write": true
     },
+    "user_activity_logs": {
+      ".read": true,
+      ".write": true
+    },
+    "registered_users": {
+      ".read": true,
+      ".write": true
+    },
     "download_events": {
       ".read": true,
       ".write": true

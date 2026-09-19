@@ -1,4 +1,4 @@
-import { collection, addDoc, getDocs, query, orderBy, limit } from 'firebase/firestore';
+import { collection, addDoc, doc, setDoc, getDocs, query, orderBy, limit, where } from 'firebase/firestore';
 import { ref, push, set } from 'firebase/database';
 import { db, rtdb, auth } from '../firebase';
 import { UserActivityRecord, DownloadEventRecord, ExamScoreRecord, ExamSubmissionRecord, UserProfile } from '../types';
@@ -6,6 +6,68 @@ import { isExcludedAdminActivity } from '../utils/sanitizer';
 
 export type { UserActivityRecord, DownloadEventRecord, ExamScoreRecord, ExamSubmissionRecord };
 export type ActivityLogRecord = UserActivityRecord;
+
+export interface GlobalUserActivityLog {
+  id: string;
+  userId: string;
+  userName: string;
+  userEmail: string;
+  activityType: string;
+  action: string;
+  details: string;
+  page?: string;
+  device: string;
+  browser: string;
+  isYouTubeSubscribed: boolean;
+  timestamp: string;
+  metadata?: Record<string, any>;
+}
+
+export interface GlobalRegisteredUser {
+  id: string;
+  name: string;
+  displayName: string;
+  email: string;
+  photoURL?: string;
+  district?: string;
+  province?: string;
+  targetExam?: string;
+  totalLogins: number;
+  pagesVisited: string[];
+  lastPageVisited?: string;
+  testsTaken: number;
+  isYouTubeSubscribed: boolean;
+  lastLoginAt: string;
+  lastActive: string;
+  device: string;
+  browser: string;
+  registeredAt: string;
+  totalXp: number;
+  isPro: boolean;
+  entryStatus: string;
+}
+
+export function getClientDeviceInfo(): { device: string; browser: string } {
+  if (typeof window === 'undefined') {
+    return { device: 'Desktop', browser: 'Browser' };
+  }
+  const ua = navigator.userAgent || '';
+  let device = 'Desktop';
+  if (/mobile|android|iphone|ipod|blackberry|iemobile|opera mini/i.test(ua)) {
+    device = 'Mobile';
+  } else if (/ipad|tablet/i.test(ua) || (navigator.platform === 'MacIntel' && navigator.maxTouchPoints > 1)) {
+    device = 'Tablet';
+  }
+
+  let browser = 'Unknown';
+  if (/edg/i.test(ua)) browser = 'Edge';
+  else if (/opr|opera/i.test(ua)) browser = 'Opera';
+  else if (/chrome|crios/i.test(ua)) browser = 'Chrome';
+  else if (/firefox|fxios/i.test(ua)) browser = 'Firefox';
+  else if (/safari/i.test(ua)) browser = 'Safari';
+
+  return { device, browser };
+}
 
 const STORAGE_KEYS = {
   USER_ACTIVITIES: 'btn_user_activities_cache',
@@ -83,6 +145,16 @@ export class ActivityTrackingService {
       }
     };
 
+    // Also trigger mandatory global database logging
+    this.logUserActivity({
+      user: params.user,
+      activityType: params.activityType,
+      action: params.details,
+      details: params.details,
+      page: params.metadata?.page || 'अध्ययन सामग्री',
+      metadata: params.metadata
+    }).catch(() => {});
+
     // 1. Cache locally for instant availability
     try {
       const cached = this.getLocalActivities(false);
@@ -127,6 +199,342 @@ export class ActivityTrackingService {
     } catch {}
 
     return record;
+  }
+
+  // =========================================================================
+  // MANDATORY GLOBAL DATABASE LOGGING & REGISTERED USERS SYNC
+  // Writes directly to Firestore `user_activity_logs` & `registered_users`,
+  // backend server database, and Realtime Database.
+  // =========================================================================
+
+  /**
+   * Log any action directly to `user_activity_logs` and auto-sync `registered_users`
+   */
+  static async logUserActivity(params: {
+    user?: Partial<UserProfile> | null;
+    activityType: string;
+    action?: string;
+    details: string;
+    page?: string;
+    isYouTubeSubscribed?: boolean;
+    testsTakenIncrement?: boolean;
+    metadata?: Record<string, any>;
+  }): Promise<GlobalUserActivityLog> {
+    const resolved = this.resolveUserDetails(params.user);
+    const { device, browser } = getClientDeviceInfo();
+    const timestamp = new Date().toISOString();
+    const logId = `act-${Date.now()}-${Math.random().toString(36).substring(2, 8)}`;
+    const page = params.page || params.metadata?.page || 'गृहपृष्ठ';
+    const action = params.action || params.details;
+    const isSubscribed = params.isYouTubeSubscribed ?? Boolean(params.user?.isYouTubeSubscribed);
+
+    const logRecord: GlobalUserActivityLog = {
+      id: logId,
+      userId: resolved.uid,
+      userName: resolved.displayName,
+      userEmail: resolved.email,
+      activityType: params.activityType,
+      action,
+      details: params.details,
+      page,
+      device,
+      browser,
+      isYouTubeSubscribed: isSubscribed,
+      timestamp,
+      metadata: params.metadata || {}
+    };
+
+    // 1. Direct write to Firestore `user_activity_logs`
+    try {
+      if (db) {
+        const docRef = doc(collection(db, 'user_activity_logs'));
+        setDoc(docRef, logRecord).catch(err => {
+          console.warn('Firestore user_activity_logs write notice:', err.message);
+        });
+      }
+    } catch (e) {
+      console.warn('Firestore user_activity_logs notice:', e);
+    }
+
+    // 2. Direct write to Firestore `registered_users`
+    try {
+      if (db && (resolved.email || resolved.uid)) {
+        const userDocId = (resolved.email || resolved.uid).toLowerCase().replace(/[^a-z0-9_@.-]/g, '_');
+        const userDocRef = doc(db, 'registered_users', userDocId);
+        
+        const userData: Partial<GlobalRegisteredUser> = {
+          id: resolved.uid,
+          name: resolved.displayName,
+          displayName: resolved.displayName,
+          email: resolved.email,
+          photoURL: params.user?.photoURL || params.user?.avatarUrl || '',
+          district: resolved.district,
+          province: params.user?.province || 'बागमती प्रदेश',
+          targetExam: resolved.targetExam,
+          lastActive: timestamp,
+          lastPageVisited: page,
+          device,
+          browser,
+          isYouTubeSubscribed: isSubscribed,
+          isPro: Boolean(params.user?.isPro || params.user?.isProUser),
+          entryStatus: params.user?.entryStatus || (params.user?.isPro ? 'प्रो सक्रिय' : (resolved.email.includes('@gmail.com') ? 'Google प्रमाणीकृत' : 'सक्रिय'))
+        };
+
+        if (params.activityType === 'login') {
+          userData.lastLoginAt = timestamp;
+        }
+
+        setDoc(userDocRef, userData, { merge: true }).catch(() => {});
+      }
+    } catch (e) {
+      console.warn('Firestore registered_users write notice:', e);
+    }
+
+    // 3. Direct write to Realtime Database
+    try {
+      if (rtdb) {
+        const rtdbLogRef = push(ref(rtdb, 'user_activity_logs'));
+        set(rtdbLogRef, logRecord).catch(() => {});
+        if (resolved.uid) {
+          set(ref(rtdb, `registered_users/${resolved.uid}`), {
+            id: resolved.uid,
+            displayName: resolved.displayName,
+            email: resolved.email,
+            device,
+            browser,
+            lastActive: timestamp,
+            lastPageVisited: page,
+            isYouTubeSubscribed: isSubscribed
+          }).catch(() => {});
+        }
+      }
+    } catch {}
+
+    // 4. Dual write to backend server `/api/user-tracking/log`
+    try {
+      fetch('/api/user-tracking/log', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          ...logRecord,
+          district: resolved.district,
+          targetExam: resolved.targetExam,
+          totalXp: params.user?.xp || 150,
+          isPro: params.user?.isPro
+        })
+      }).catch(() => {});
+    } catch {}
+
+    return logRecord;
+  }
+
+  /**
+   * Log User Login event
+   */
+  static async logUserLogin(user?: Partial<UserProfile> | null, page: string = 'गृहपृष्ठ'): Promise<void> {
+    const resolved = this.resolveUserDetails(user);
+    const { device, browser } = getClientDeviceInfo();
+    const action = 'लगइन सफल';
+    const details = `विद्यार्थी लगइन: ${resolved.displayName} (${resolved.email || 'अतिथि'}) • ${device} / ${browser}`;
+
+    await this.logUserActivity({
+      user,
+      activityType: 'login',
+      action,
+      details,
+      page,
+      metadata: { loginTime: new Date().toISOString(), device, browser }
+    });
+
+    // Also sync user registration details
+    this.syncRegisteredUser(user, true).catch(() => {});
+  }
+
+  /**
+   * Log Page Navigation / Visit
+   */
+  static async logPageVisit(user?: Partial<UserProfile> | null, pageName: string = 'गृहपृष्ठ'): Promise<void> {
+    const resolved = this.resolveUserDetails(user);
+    const { device, browser } = getClientDeviceInfo();
+
+    await this.logUserActivity({
+      user,
+      activityType: 'page_view',
+      action: `पृष्ठ भ्रमण: ${pageName}`,
+      details: `${resolved.displayName} ले '${pageName}' पृष्ठ भ्रमण गर्नुभयो (${device})`,
+      page: pageName,
+      metadata: { pageName, device, browser }
+    });
+  }
+
+  /**
+   * Log Quiz Attempt & Completion
+   */
+  static async logQuizAttempt(user: Partial<UserProfile> | null | undefined, params: {
+    quizId: string;
+    quizTitle: string;
+    score?: number;
+    totalQuestions: number;
+    accuracy?: number;
+    completed?: boolean;
+    timeTakenSeconds?: number;
+  }): Promise<void> {
+    const resolved = this.resolveUserDetails(user);
+    const isCompleted = params.completed ?? true;
+    const type = isCompleted ? 'quiz_complete' : 'quiz_start';
+    const scoreStr = typeof params.score === 'number' ? ` (${params.score}/${params.totalQuestions}, ${params.accuracy || 0}%)` : '';
+    const action = isCompleted ? `परीक्षा सम्पन्न: ${params.quizTitle}` : `परीक्षा सुरु: ${params.quizTitle}`;
+    const details = `${resolved.displayName} ले '${params.quizTitle}' ${isCompleted ? `सम्पन्न गर्नुभयो${scoreStr}` : 'सुरु गर्नुभयो'}`;
+
+    await this.logUserActivity({
+      user,
+      activityType: type,
+      action,
+      details,
+      page: '५० सेटहरू (अभ्यास परीक्षा)',
+      testsTakenIncrement: isCompleted,
+      metadata: {
+        quizId: params.quizId,
+        quizTitle: params.quizTitle,
+        score: params.score,
+        totalQuestions: params.totalQuestions,
+        accuracy: params.accuracy,
+        timeTakenSeconds: params.timeTakenSeconds
+      }
+    });
+  }
+
+  /**
+   * Log YouTube Subscription & Unlock click
+   */
+  static async logYouTubeSubscribe(user?: Partial<UserProfile> | null): Promise<void> {
+    const resolved = this.resolveUserDetails(user);
+    const { device, browser } = getClientDeviceInfo();
+
+    await this.logUserActivity({
+      user,
+      activityType: 'youtube_subscribe',
+      action: 'युट्युब च्यानल सदस्यता अनलक',
+      details: `${resolved.displayName} ले आधिकारिक युट्युब च्यानल Subscribe गरि १०,०००+ PDF अनलक गर्नुभयो (${device} • ${browser})`,
+      page: 'युट्युब गेटवे अनलक',
+      isYouTubeSubscribed: true,
+      metadata: {
+        channel: '@bankingtayarinepal',
+        unlockedPdfCount: '10,000+',
+        timestamp: new Date().toISOString()
+      }
+    });
+  }
+
+  /**
+   * Upsert registered user row in database
+   */
+  static async syncRegisteredUser(user?: Partial<UserProfile> | null, isLoginEvent: boolean = false): Promise<void> {
+    if (!user) return;
+    const resolved = this.resolveUserDetails(user);
+    const { device, browser } = getClientDeviceInfo();
+    const timestamp = new Date().toISOString();
+
+    const payload = {
+      id: resolved.uid,
+      name: resolved.displayName,
+      displayName: resolved.displayName,
+      email: resolved.email,
+      photoURL: user.photoURL || user.avatarUrl || '',
+      district: resolved.district,
+      province: user.province || 'बागमती प्रदेश',
+      targetExam: resolved.targetExam,
+      device,
+      browser,
+      isYouTubeSubscribed: Boolean(user.isYouTubeSubscribed),
+      isPro: Boolean(user.isPro || user.isProUser),
+      totalXp: user.xp || 150,
+      testsTaken: user.quizzesCompleted || 0,
+      pagesVisited: Array.isArray(user.pagesVisited) ? user.pagesVisited : ['गृहपृष्ठ', '५० सेटहरू'],
+      lastActive: timestamp,
+      isLoginEvent
+    };
+
+    // Firestore
+    try {
+      if (db && (resolved.email || resolved.uid)) {
+        const userDocId = (resolved.email || resolved.uid).toLowerCase().replace(/[^a-z0-9_@.-]/g, '_');
+        await setDoc(doc(db, 'registered_users', userDocId), payload, { merge: true });
+      }
+    } catch {}
+
+    // Server
+    try {
+      await fetch('/api/user-tracking/sync-user', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify(payload)
+      });
+    } catch {}
+  }
+
+  /**
+   * Query complete step-by-step activity timeline for any specific user
+   */
+  static async getUserActivityTimeline(userId?: string, email?: string): Promise<GlobalUserActivityLog[]> {
+    const idMap = new Map<string, GlobalUserActivityLog>();
+    const cleanEmail = email?.trim().toLowerCase();
+
+    // 1. Try Firestore direct query
+    try {
+      if (db) {
+        const logsRef = collection(db, 'user_activity_logs');
+        let q = query(logsRef, orderBy('timestamp', 'desc'), limit(100));
+        if (cleanEmail) {
+          q = query(logsRef, where('userEmail', '==', cleanEmail), orderBy('timestamp', 'desc'), limit(100));
+        } else if (userId) {
+          q = query(logsRef, where('userId', '==', userId), orderBy('timestamp', 'desc'), limit(100));
+        }
+        const snap = await getDocs(q);
+        snap.forEach(d => {
+          const data = d.data() as GlobalUserActivityLog;
+          idMap.set(d.id, { id: d.id, ...data });
+        });
+      }
+    } catch (fsErr) {
+      // Fallback query without compound index
+      try {
+        if (db) {
+          const q2 = query(collection(db, 'user_activity_logs'), orderBy('timestamp', 'desc'), limit(200));
+          const snap2 = await getDocs(q2);
+          snap2.forEach(d => {
+            const data = d.data() as GlobalUserActivityLog;
+            const match = (cleanEmail && data.userEmail && data.userEmail.toLowerCase() === cleanEmail) ||
+                          (userId && data.userId === userId);
+            if (match) {
+              idMap.set(d.id, { id: d.id, ...data });
+            }
+          });
+        }
+      } catch {}
+    }
+
+    // 2. Query backend server database /api/user-tracking/logs
+    try {
+      const params = new URLSearchParams();
+      if (cleanEmail) params.set('email', cleanEmail);
+      else if (userId) params.set('userId', userId);
+      params.set('limit', '200');
+
+      const res = await fetch(`/api/user-tracking/logs?${params.toString()}`);
+      if (res.ok) {
+        const data = await res.json();
+        if (data && Array.isArray(data.logs)) {
+          for (const l of data.logs) {
+            if (!idMap.has(l.id)) {
+              idMap.set(l.id, l);
+            }
+          }
+        }
+      }
+    } catch {}
+
+    return Array.from(idMap.values()).sort((a, b) => new Date(b.timestamp).getTime() - new Date(a.timestamp).getTime());
   }
 
   /**
