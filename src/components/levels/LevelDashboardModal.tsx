@@ -271,28 +271,32 @@ export const LevelDashboardModal: React.FC<LevelDashboardModalProps> = ({
           </div>
 
           {/* ================================================================== */}
-          {/* DYNAMIC LEVEL SELECTOR BUTTONS: "तह ४", "तह ५", "तह ६"           */}
+          {/* DYNAMIC LEVEL SELECTOR BUTTONS: "तह ४ (सहायक)", "तह ५", "तह ६"     */}
           {/* ================================================================== */}
           <div className="flex items-center justify-between gap-2 mt-2 pt-2 border-t border-slate-100 dark:border-slate-800/60 flex-wrap">
             <div className="flex items-center gap-2">
-              <span className="text-xs font-bold text-slate-400 dark:text-slate-500">
+              <span className="text-xs font-bold text-slate-500 dark:text-slate-400">
                 {language === 'ne' ? 'तह (Level):' : 'Tier/Level:'}
               </span>
               <div className="inline-flex rounded-xl bg-slate-100 dark:bg-slate-800 p-1 border border-slate-200 dark:border-slate-700">
-                {LEVEL_DEFINITIONS.map(def => {
+                {[
+                  { level: '4' as const, labelNe: 'तह ४ (सहायक)', labelEn: 'Level 4 (Assistant)' },
+                  { level: '5' as const, labelNe: 'तह ५ (वरिष्ठ सहायक)', labelEn: 'Level 5 (Sr. Assistant)' },
+                  { level: '6' as const, labelNe: 'तह ६ (अधिकृत)', labelEn: 'Level 6 (Officer)' }
+                ].map(def => {
                   const isSelected = def.level === selectedLevel;
                   return (
                     <button
                       key={def.level}
                       type="button"
                       onClick={() => setSelectedLevel(def.level)}
-                      className={`px-3 py-1 rounded-lg text-xs font-black transition cursor-pointer flex items-center gap-1.5 ${
+                      className={`px-3 py-1.5 rounded-lg text-xs font-black transition cursor-pointer flex items-center gap-1.5 ${
                         isSelected
-                          ? 'bg-blue-600 text-white shadow-xs'
-                          : 'text-slate-600 dark:text-slate-400 hover:text-slate-900 dark:hover:text-white'
+                          ? 'bg-blue-600 text-white shadow-xs scale-100 ring-1 ring-blue-400/40'
+                          : 'text-slate-700 dark:text-slate-300 hover:text-slate-900 dark:hover:text-white'
                       }`}
                     >
-                      <span>{language === 'ne' ? def.shortLabelNe : def.shortLabelEn}</span>
+                      <span>{language === 'ne' ? def.labelNe : def.labelEn}</span>
                     </button>
                   );
                 })}
@@ -301,7 +305,7 @@ export const LevelDashboardModal: React.FC<LevelDashboardModalProps> = ({
 
             {/* Progress Badge Indicator */}
             <div className="flex items-center gap-2">
-              <span className="text-xs font-bold text-slate-500 dark:text-slate-400">
+              <span className="text-xs font-black text-slate-500 dark:text-slate-400">
                 {language === 'ne' ? 'प्रगति:' : 'Progress:'}
               </span>
               <div className="w-24 sm:w-32 bg-slate-200 dark:bg-slate-700 rounded-full h-2.5 overflow-hidden">
@@ -311,21 +315,21 @@ export const LevelDashboardModal: React.FC<LevelDashboardModalProps> = ({
                 />
               </div>
               <span className="text-xs font-black text-emerald-600 dark:text-emerald-400">
-                {completionStats.percentage}%
+                {completionStats.percentage}% पूर्ण
               </span>
             </div>
           </div>
         </div>
 
         {/* ==================================================================== */}
-        {/* 4 INTERACTIVE TABS BAR                                               */}
+        {/* 4 INTERACTIVE TABS BAR WITH BOLD HIGH-CONTRAST TYPOGRAPHY            */}
         {/* ==================================================================== */}
-        <div className="flex border-b border-slate-200 dark:border-slate-800 bg-slate-50/70 dark:bg-slate-900/60 overflow-x-auto custom-scrollbar shrink-0">
+        <div className="flex border-b border-slate-200 dark:border-slate-800 bg-slate-50/80 dark:bg-slate-900/80 overflow-x-auto custom-scrollbar shrink-0">
           {[
-            { index: 0, labelNe: 'पाठ्यक्रम विश्लेषण', labelEn: 'Syllabus Breakdown', icon: BookOpen },
-            { index: 1, labelNe: 'प्रश्न भण्डार MCQs (View-Only)', labelEn: 'Question Bank', icon: HelpCircle },
-            { index: 2, labelNe: 'अनलाइन परीक्षा & अभ्यास', labelEn: 'Mock Test & Practice', icon: PlayCircle },
-            { index: 3, labelNe: 'प्रगति ट्र्याकर', labelEn: 'Progress Tracker', icon: BarChart3 }
+            { index: 0, tag: 'Tab 1', labelNe: 'पाठ्यक्रम विश्लेषण', labelEn: 'Syllabus Breakdown', icon: BookOpen },
+            { index: 1, tag: 'Tab 2', labelNe: 'प्रश्न भण्डार MCQs', labelEn: 'Question Bank', icon: HelpCircle },
+            { index: 2, tag: 'Tab 3', labelNe: 'अनलाइन परीक्षा', labelEn: 'Mock Test Engine', icon: PlayCircle },
+            { index: 3, tag: 'Tab 4', labelNe: 'प्रगति ट्र्याकर', labelEn: 'Progress Tracker', icon: BarChart3 }
           ].map(tab => {
             const Icon = tab.icon;
             const isActive = activeTab === tab.index;
@@ -334,12 +338,17 @@ export const LevelDashboardModal: React.FC<LevelDashboardModalProps> = ({
                 key={tab.index}
                 type="button"
                 onClick={() => setActiveTab(tab.index)}
-                className={`flex-1 min-w-[150px] py-3 px-4 text-xs font-bold flex items-center justify-center gap-2 border-b-2 transition cursor-pointer whitespace-nowrap ${
+                className={`flex-1 min-w-[160px] py-3.5 px-4 text-xs font-black flex items-center justify-center gap-2 border-b-2 transition cursor-pointer whitespace-nowrap ${
                   isActive
                     ? 'border-blue-600 text-blue-600 dark:text-blue-400 bg-white dark:bg-slate-900 shadow-2xs'
-                    : 'border-transparent text-slate-600 dark:text-slate-400 hover:text-slate-900 dark:hover:text-white hover:bg-slate-100/50 dark:hover:bg-slate-800/40'
+                    : 'border-transparent text-slate-600 dark:text-slate-400 hover:text-slate-900 dark:hover:text-white hover:bg-slate-100/60 dark:hover:bg-slate-800/40'
                 }`}
               >
+                <span className={`text-[9px] font-black uppercase px-1.5 py-0.5 rounded ${
+                  isActive ? 'bg-blue-100 dark:bg-blue-950 text-blue-700 dark:text-blue-300' : 'bg-slate-200 dark:bg-slate-800 text-slate-500'
+                }`}>
+                  {tab.tag}
+                </span>
                 <Icon className={`w-4 h-4 ${isActive ? 'text-blue-600 dark:text-blue-400' : 'text-slate-400'}`} />
                 <span>{language === 'ne' ? tab.labelNe : tab.labelEn}</span>
               </button>
