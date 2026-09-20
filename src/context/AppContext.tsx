@@ -19,8 +19,18 @@ import { fetchOfficialChannelVideos } from '../services/youtubeService';
 import { AnalyticsService } from '../services/analyticsService';
 import { ActivityTrackingService } from '../services/activityTrackingService';
 import { FirebaseAuthService } from '../services/firebaseAuthService';
+import { AppLanguage, TRANSLATIONS } from '../utils/translations';
 
 interface AppContextType {
+  language: AppLanguage;
+  setLanguage: (lang: AppLanguage) => void;
+  toggleLanguage: () => void;
+  t: typeof TRANSLATIONS.ne;
+  isLevelDashboardOpen: boolean;
+  setIsLevelDashboardOpen: (open: boolean) => void;
+  levelDashboardConfig: { categoryId: string; level: '4' | '5' | '6'; activeTab?: number } | null;
+  openLevelDashboard: (categoryId?: string, level?: '4' | '5' | '6', activeTab?: number) => void;
+  closeLevelDashboard: () => void;
   activeTab: NavigationTab;
   setActiveTab: (tab: NavigationTab) => void;
   theme: 'light' | 'dark';
@@ -176,6 +186,40 @@ export const AppProvider: React.FC<{ children: React.ReactNode; initialUser?: Us
   }, []);
 
   // Synchronously initialize theme from persistent storage to eliminate theme flash
+  const [language, setLanguageState] = useState<AppLanguage>(() => StorageService.getLanguage());
+
+  const setLanguage = useCallback((lang: AppLanguage) => {
+    setLanguageState(lang);
+    StorageService.setLanguage(lang);
+  }, []);
+
+  const toggleLanguage = useCallback(() => {
+    setLanguageState(prev => {
+      const next = prev === 'ne' ? 'en' : 'ne';
+      StorageService.setLanguage(next);
+      return next;
+    });
+  }, []);
+
+  const t = TRANSLATIONS[language];
+
+  // Level Dashboard Modal State
+  const [isLevelDashboardOpen, setIsLevelDashboardOpen] = useState(false);
+  const [levelDashboardConfig, setLevelDashboardConfig] = useState<{ categoryId: string; level: '4' | '5' | '6'; activeTab?: number }>({
+    categoryId: 'banking',
+    level: '4',
+    activeTab: 0
+  });
+
+  const openLevelDashboard = useCallback((categoryId: string = 'banking', level: '4' | '5' | '6' = '4', activeTab: number = 0) => {
+    setLevelDashboardConfig({ categoryId, level, activeTab });
+    setIsLevelDashboardOpen(true);
+  }, []);
+
+  const closeLevelDashboard = useCallback(() => {
+    setIsLevelDashboardOpen(false);
+  }, []);
+
   const [theme, setThemeState] = useState<'light' | 'dark'>(() => StorageService.getTheme());
   
   const [user, setUserState] = useState<UserProfile>(() => {
@@ -875,7 +919,16 @@ export const AppProvider: React.FC<{ children: React.ReactNode; initialUser?: Us
         addNotification,
         activeReaderPage,
         setActiveReaderPage,
-        addToast
+        addToast,
+        language,
+        setLanguage,
+        toggleLanguage,
+        t,
+        isLevelDashboardOpen,
+        setIsLevelDashboardOpen,
+        levelDashboardConfig,
+        openLevelDashboard,
+        closeLevelDashboard
       }}
     >
       {/* Global Toast Alert Notifications */}

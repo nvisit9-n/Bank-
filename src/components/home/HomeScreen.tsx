@@ -41,6 +41,7 @@ import { getQuestionsByCategory, convertQuizQuestionToQuestion } from '../../dat
 import { UserProfileBanner } from '../UserProfileBanner';
 import { QuickAccess } from '../QuickAccess';
 import { OfficialYouTubeSection } from './OfficialYouTubeSection';
+import { LevelSelectorCard } from '../levels/LevelSelectorCard';
 
 export const HomeScreen: React.FC = () => {
   const { 
@@ -161,6 +162,9 @@ export const HomeScreen: React.FC = () => {
         onStartChallenge={handleStartTodayChallenge}
         onOpenNotes={() => setActiveTab('free-notes')}
       />
+
+      {/* ULTRA-PREMIUM INTERNATIONAL-GRADE INTERACTIVE LEVEL SELECTOR & DASHBOARD */}
+      <LevelSelectorCard />
 
       {/* Gamified Profile Completion Reminder Banner (Non-blocking) */}
       {!profileStats.isComplete && (

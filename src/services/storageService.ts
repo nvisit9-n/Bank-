@@ -24,7 +24,8 @@ const STORAGE_KEYS = {
   THEME: 'btn_theme_mode_v1',
   CUSTOM_NOTES: 'btn_custom_notes_v1',
   CUSTOM_PREMIUM: 'btn_custom_premium_v1',
-  NOTIFICATIONS: 'btn_notifications_v2'
+  NOTIFICATIONS: 'btn_notifications_v2',
+  LANGUAGE: 'btn_language_v1'
 };
 
 export const GUEST_USER_PROFILE: UserProfile = {
@@ -377,6 +378,26 @@ export class StorageService {
       }
     } catch (e) {
       console.error('Failed to save theme', e);
+    }
+  }
+
+  // --- Bilingual Language preference (Defaults to clean Nepali Core) ---
+  static getLanguage(): 'ne' | 'en' {
+    try {
+      const lang = safeStorage.getItem(STORAGE_KEYS.LANGUAGE);
+      if (lang === 'en' || lang === 'ne') return lang;
+    } catch {}
+    return 'ne'; // Default Nepali Core
+  }
+
+  static setLanguage(lang: 'ne' | 'en'): void {
+    try {
+      safeStorage.setItem(STORAGE_KEYS.LANGUAGE, lang);
+      if (typeof window !== 'undefined') {
+        window.dispatchEvent(new CustomEvent('btn:language-changed', { detail: { language: lang } }));
+      }
+    } catch (e) {
+      console.error('Failed to save language', e);
     }
   }
 

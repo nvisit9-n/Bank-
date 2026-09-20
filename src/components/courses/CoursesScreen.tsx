@@ -25,6 +25,7 @@ import {
 import { useApp } from '../../context/AppContext';
 import { MOCK_COURSES } from '../../data/mockData';
 import { CourseProgram, SubjectModule, TopicItem, SyllabusPaper, SyllabusSection } from '../../types';
+import { LevelSelectorCard } from '../levels/LevelSelectorCard';
 
 export const CoursesScreen: React.FC = () => {
   const { openNoteReader, openPremiumDetail, setActiveTab, hasPurchased } = useApp();
@@ -123,6 +124,9 @@ export const CoursesScreen: React.FC = () => {
           नेपालका बैंक तथा वित्तीय संस्था (NRB, RBB, ADBL, NBL, EPF) को आधिकारिक एकीकृत पाठ्यक्रम र अध्ययन सामग्री।
         </p>
       </div>
+
+      {/* Interactive Level Selector Hub & 4-Tab Dashboard */}
+      <LevelSelectorCard />
 
       {/* Program Selector Tabs */}
       <div className="flex flex-wrap p-1.5 bg-slate-200/80 dark:bg-slate-800 rounded-2xl gap-1 max-w-3xl">

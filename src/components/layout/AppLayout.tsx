@@ -34,6 +34,7 @@ import { LoginModal } from '../auth/LoginModal';
 import { MASTER_ADMIN_PIN } from '../../utils/sanitizer';
 import { PWAInstallPrompt } from '../pwa/PWAInstallPrompt';
 import { TimedYouTubePopupModal } from '../modals/TimedYouTubePopupModal';
+import { LevelDashboardModal } from '../levels/LevelDashboardModal';
 
 export interface AppLayoutProps {
   onLogout?: () => void;
@@ -58,7 +59,10 @@ export const AppLayout: React.FC<AppLayoutProps> = () => {
     loginModalMessage,
     user,
     setUser,
-    setIsLoggedIn
+    setIsLoggedIn,
+    isLevelDashboardOpen,
+    closeLevelDashboard,
+    levelDashboardConfig
   } = useApp();
 
   const [purchasingModalNote, setPurchasingModalNote] = React.useState<any>(null);
@@ -174,6 +178,17 @@ export const AppLayout: React.FC<AppLayoutProps> = () => {
 
       {/* 2-Day Timed Auto-Appearing YouTube Subscribe & PDF Unlock Gateway */}
       <TimedYouTubePopupModal />
+
+      {/* Interactive Level Dashboard Modal (4-Tab Breakdown) */}
+      {isLevelDashboardOpen && (
+        <LevelDashboardModal
+          isOpen={isLevelDashboardOpen}
+          onClose={closeLevelDashboard}
+          initialCategoryId={levelDashboardConfig?.categoryId || 'banking'}
+          initialLevel={levelDashboardConfig?.level || '4'}
+          initialTab={levelDashboardConfig?.activeTab ?? 0}
+        />
+      )}
 
     </div>
   );

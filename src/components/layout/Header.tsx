@@ -155,6 +155,10 @@ export const Header: React.FC = () => {
     user, 
     theme, 
     toggleTheme, 
+    language,
+    setLanguage,
+    toggleLanguage,
+    t,
     setIsSearchOpen, 
     setIsAiModalOpen,
     setIsNotificationsOpen,
@@ -212,18 +216,18 @@ export const Header: React.FC = () => {
   const photoURL = user?.photoURL || user?.avatarUrl || (isGuest ? '/default-avatar.png' : `https://ui-avatars.com/api/?name=${encodeURIComponent(displayName)}&background=0B2046&color=fff&size=256`);
 
   const drawerNavItems: { tab: NavigationTab; label: string; icon: React.ComponentType<{ className?: string }>; badge?: string | number; badgeColor?: string }[] = [
-    { tab: 'home', label: 'गृहपृष्ठ (Home)', icon: Home },
-    { tab: 'courses', label: 'पाठ्यक्रम (Courses)', icon: BookOpen },
-    { tab: 'quiz', label: 'संगठित संस्था (Public Enterprises)', icon: Building2, badge: '५० सेट', badgeColor: 'bg-[#DC2626]' },
-    { tab: 'free-notes', label: 'अध्ययन / AI नोट्स (Notes)', icon: FileText, badge: 'AI' },
-    { tab: 'leaderboard', label: 'वरियता (Leaderboard)', icon: Trophy, badge: 'Rank' },
-    { tab: 'video-lectures', label: 'भिडियो कक्षाहरू (Videos)', icon: Youtube, badge: 'HD', badgeColor: 'bg-red-600' },
-    { tab: 'current-affairs', label: 'समसामयिक (Current Affairs)', icon: Newspaper },
-    { tab: 'premium', label: 'प्रिमियम नोट्स (Premium)', icon: Sparkles, badge: 'Pro' },
-    { tab: 'purchases', label: 'मेरो खरिद (My Purchases)', icon: ShoppingBag, badge: (purchases || []).length },
-    { tab: 'bookmarks', label: 'बुकमार्क (Bookmarks)', icon: Bookmark, badge: (bookmarks || []).length },
-    { tab: 'profile', label: 'मेरो प्रोफाइल (Profile)', icon: UserIcon },
-    { tab: 'about', label: 'हाम्रो बारेमा (About Us)', icon: Info, badge: 'Story', badgeColor: 'bg-blue-600' }
+    { tab: 'home', label: language === 'ne' ? 'गृहपृष्ठ' : 'Home', icon: Home },
+    { tab: 'courses', label: language === 'ne' ? 'पाठ्यक्रम' : 'Syllabus & Courses', icon: BookOpen },
+    { tab: 'quiz', label: language === 'ne' ? 'संस्थान तथा संगठित संस्था' : 'Public Enterprises', icon: Building2, badge: language === 'ne' ? '५० सेट' : '50 Sets', badgeColor: 'bg-[#DC2626]' },
+    { tab: 'free-notes', label: language === 'ne' ? 'अध्ययन / AI नोट्स' : 'Study & AI Notes', icon: FileText, badge: 'AI' },
+    { tab: 'leaderboard', label: language === 'ne' ? 'वरियता' : 'Leaderboard', icon: Trophy, badge: 'Rank' },
+    { tab: 'video-lectures', label: language === 'ne' ? 'भिडियो कक्षाहरू' : 'Video Lectures', icon: Youtube, badge: 'HD', badgeColor: 'bg-red-600' },
+    { tab: 'current-affairs', label: language === 'ne' ? 'समसामयिक' : 'Current Affairs', icon: Newspaper },
+    { tab: 'premium', label: language === 'ne' ? 'प्रिमियम नोट्स' : 'Premium Notes', icon: Sparkles, badge: 'Pro' },
+    { tab: 'purchases', label: language === 'ne' ? 'मेरो खरिद' : 'My Purchases', icon: ShoppingBag, badge: (purchases || []).length },
+    { tab: 'bookmarks', label: language === 'ne' ? 'बुकमार्क' : 'Bookmarks', icon: Bookmark, badge: (bookmarks || []).length },
+    { tab: 'profile', label: language === 'ne' ? 'मेरो प्रोफाइल' : 'My Profile', icon: UserIcon },
+    { tab: 'about', label: language === 'ne' ? 'हाम्रो बारेमा' : 'About Us', icon: Info, badge: 'Story', badgeColor: 'bg-blue-600' }
   ];
 
   const handleDrawerNavigate = (tab: NavigationTab) => {
@@ -354,6 +358,40 @@ export const Header: React.FC = () => {
                   <Moon className="w-5 h-5 text-slate-700" />
                 )}
               </button>
+
+              {/* Bilingual Language Switcher: 🇳🇵 नेपाली / 🇬🇧 English */}
+              <div 
+                id="header-language-toggle"
+                className="flex items-center p-0.5 rounded-xl bg-slate-100 dark:bg-slate-800 border border-slate-200 dark:border-slate-700 shadow-2xs shrink-0"
+                title="भाषा छनोट / Select Language"
+              >
+                <button
+                  type="button"
+                  onClick={() => setLanguage('ne')}
+                  className={`px-2 py-1 rounded-lg text-xs font-black transition-all flex items-center gap-1 cursor-pointer ${
+                    language === 'ne'
+                      ? 'bg-[#0B2046] text-white shadow-xs'
+                      : 'text-slate-600 dark:text-slate-400 hover:text-slate-900 dark:hover:text-white'
+                  }`}
+                  title="नेपाली भाषा (Default Core)"
+                >
+                  <span className="text-xs">🇳🇵</span>
+                  <span className="hidden sm:inline">नेपाली</span>
+                </button>
+                <button
+                  type="button"
+                  onClick={() => setLanguage('en')}
+                  className={`px-2 py-1 rounded-lg text-xs font-black transition-all flex items-center gap-1 cursor-pointer ${
+                    language === 'en'
+                      ? 'bg-[#0B2046] text-white shadow-xs'
+                      : 'text-slate-600 dark:text-slate-400 hover:text-slate-900 dark:hover:text-white'
+                  }`}
+                  title="English Language"
+                >
+                  <span className="text-xs">🇬🇧</span>
+                  <span className="hidden sm:inline">EN</span>
+                </button>
+              </div>
 
               {/* Notification Bell with Dynamic Counter Badge (40px touch target) */}
               <button
@@ -746,10 +784,38 @@ export const Header: React.FC = () => {
               )}
             </div>
 
-            {/* Drawer Bottom Controls: Theme Switch & Logout */}
+            {/* Drawer Bottom Controls: Theme Switch, Language & Logout */}
             <div className="p-3 border-t border-slate-100 dark:border-slate-800 bg-slate-50/50 dark:bg-slate-900/50 space-y-2">
               <div className="flex items-center justify-between px-2 py-1">
-                <span className="text-xs font-bold text-slate-600 dark:text-slate-400">डार्क मोड (Dark Mode)</span>
+                <span className="text-xs font-bold text-slate-600 dark:text-slate-400">
+                  {language === 'ne' ? 'भाषा (Language)' : 'Language (भाषा)'}
+                </span>
+                <div className="flex items-center p-0.5 rounded-lg bg-slate-200 dark:bg-slate-800 border border-slate-300 dark:border-slate-700">
+                  <button
+                    type="button"
+                    onClick={() => setLanguage('ne')}
+                    className={`px-2 py-1 rounded-md text-xs font-bold transition ${
+                      language === 'ne' ? 'bg-[#0B2046] text-white shadow-xs' : 'text-slate-600 dark:text-slate-400'
+                    }`}
+                  >
+                    🇳🇵 नेपाली
+                  </button>
+                  <button
+                    type="button"
+                    onClick={() => setLanguage('en')}
+                    className={`px-2 py-1 rounded-md text-xs font-bold transition ${
+                      language === 'en' ? 'bg-[#0B2046] text-white shadow-xs' : 'text-slate-600 dark:text-slate-400'
+                    }`}
+                  >
+                    🇬🇧 EN
+                  </button>
+                </div>
+              </div>
+
+              <div className="flex items-center justify-between px-2 py-1">
+                <span className="text-xs font-bold text-slate-600 dark:text-slate-400">
+                  {language === 'ne' ? 'डार्क मोड (Dark Mode)' : 'Dark Mode (रातको मोड)'}
+                </span>
                 <button
                   type="button"
                   onClick={toggleTheme}
