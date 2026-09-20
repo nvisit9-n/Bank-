@@ -22,6 +22,7 @@ import {
 } from '../data/questionBank';
 import { useApp } from '../context/AppContext';
 import { PdfExportDialog } from './modals/PdfExportDialog';
+import { isOwnerAdmin } from '../utils/sanitizer';
 
 export interface SetSelectionModalProps {
   isOpen: boolean;
@@ -38,7 +39,8 @@ export const SetSelectionModal: React.FC<SetSelectionModalProps> = ({
   onStartSet,
   handleStartSet: externalHandleStartSet
 }) => {
-  const { addToast, requireAuth } = useApp();
+  const { addToast, requireAuth, user } = useApp();
+  const isAdmin = isOwnerAdmin(user?.email);
   const [searchQuery, setSearchQuery] = useState<string>('');
   const [filterDifficulty, setFilterDifficulty] = useState<string>('All');
 
@@ -113,7 +115,7 @@ export const SetSelectionModal: React.FC<SetSelectionModalProps> = ({
                   सङ्गठित संस्था ५० पूर्ण सेट हब
                 </h3>
                 <span className="px-2 py-0.5 rounded-full bg-[#DC2626] text-white text-[9px] sm:text-[10px] font-black">
-                  ५० सेट • {totalQuestionsCount.toLocaleString()} MCQs
+                  {isAdmin ? 'Admin Mode • ५० सेट' : '५० सेट • अनलाइन अभ्यास मोड (View-Only)'}
                 </span>
               </div>
               <p className="text-[11px] sm:text-xs text-blue-100 mt-0.5">
@@ -123,20 +125,22 @@ export const SetSelectionModal: React.FC<SetSelectionModalProps> = ({
           </div>
 
           <div className="flex items-center gap-2">
-            <button
-              type="button"
-              id="export-all-50-sets-pdf-btn"
-              onClick={() => {
-                setPdfScope('all-50-sets');
-                setIsPdfDialogOpen(true);
-              }}
-              className="px-3 py-1.5 rounded-xl bg-white/20 hover:bg-white/30 text-white font-black text-xs flex items-center gap-1.5 transition cursor-pointer border border-white/30 shadow-xs"
-              title="५० वटै Pre-Test सेटहरू A4 PDF डाउनलोड गर्नुहोस्"
-            >
-              <FileDown className="w-4 h-4 text-red-300" />
-              <span className="hidden sm:inline">५० Pre-Test सेटहरू PDF डाउनलोड</span>
-              <span className="sm:hidden">५० सेट PDF</span>
-            </button>
+            {isAdmin && (
+              <button
+                type="button"
+                id="export-all-50-sets-pdf-btn"
+                onClick={() => {
+                  setPdfScope('all-50-sets');
+                  setIsPdfDialogOpen(true);
+                }}
+                className="px-3 py-1.5 rounded-xl bg-white/20 hover:bg-white/30 text-white font-black text-xs flex items-center gap-1.5 transition cursor-pointer border border-white/30 shadow-xs"
+                title="५० वटै Pre-Test सेटहरू A4 PDF डाउनलोड गर्नुहोस्"
+              >
+                <FileDown className="w-4 h-4 text-red-300" />
+                <span className="hidden sm:inline">५० Pre-Test सेटहरू PDF</span>
+                <span className="sm:hidden">५० सेट PDF</span>
+              </button>
+            )}
 
             <button
               type="button"
@@ -253,20 +257,22 @@ export const SetSelectionModal: React.FC<SetSelectionModalProps> = ({
                 </div>
 
                 <div className="mt-3 flex items-center gap-2">
-                  <button
-                    type="button"
-                    id={`btn-pdf-${set.id}`}
-                    onClick={() => {
-                      setPdfScope('single-set');
-                      setPdfSetNum(set.setNumber);
-                      setIsPdfDialogOpen(true);
-                    }}
-                    className="py-2.5 px-3 rounded-xl border border-slate-300 dark:border-slate-700 bg-slate-50 dark:bg-slate-700/60 hover:bg-slate-100 dark:hover:bg-slate-700 text-slate-700 dark:text-slate-200 font-bold text-xs flex items-center justify-center gap-1 transition cursor-pointer"
-                    title={`सेट ${set.setNumber} A4 PDF डाउनलोड`}
-                  >
-                    <Download className="w-3.5 h-3.5 text-red-500" />
-                    <span>PDF</span>
-                  </button>
+                  {isAdmin && (
+                    <button
+                      type="button"
+                      id={`btn-pdf-${set.id}`}
+                      onClick={() => {
+                        setPdfScope('single-set');
+                        setPdfSetNum(set.setNumber);
+                        setIsPdfDialogOpen(true);
+                      }}
+                      className="py-2.5 px-3 rounded-xl border border-slate-300 dark:border-slate-700 bg-slate-50 dark:bg-slate-700/60 hover:bg-slate-100 dark:hover:bg-slate-700 text-slate-700 dark:text-slate-200 font-bold text-xs flex items-center justify-center gap-1 transition cursor-pointer"
+                      title={`सेट ${set.setNumber} A4 PDF डाउनलोड (व्यवस्थापक)`}
+                    >
+                      <Download className="w-3.5 h-3.5 text-red-500" />
+                      <span>PDF</span>
+                    </button>
+                  )}
 
                   <button
                     type="button"
@@ -288,18 +294,20 @@ export const SetSelectionModal: React.FC<SetSelectionModalProps> = ({
           <span>देखाउँदै: {filteredSets.length} / ५० सेटहरू (कुल {totalQuestionsCount.toLocaleString()} MCQs)</span>
 
           <div className="flex items-center gap-2">
-            <button
-              type="button"
-              id="footer-export-all-pdf-btn"
-              onClick={() => {
-                setPdfScope('all-50-sets');
-                setIsPdfDialogOpen(true);
-              }}
-              className="px-3.5 py-1.5 rounded-xl bg-[#0F2942] hover:bg-[#1A3A5F] text-white font-bold text-xs flex items-center gap-1.5 transition cursor-pointer shadow-xs"
-            >
-              <FileDown className="w-3.5 h-3.5 text-red-400" />
-              <span>५० Pre-Test सेटहरू PDF</span>
-            </button>
+            {isAdmin && (
+              <button
+                type="button"
+                id="footer-export-all-pdf-btn"
+                onClick={() => {
+                  setPdfScope('all-50-sets');
+                  setIsPdfDialogOpen(true);
+                }}
+                className="px-3.5 py-1.5 rounded-xl bg-[#0F2942] hover:bg-[#1A3A5F] text-white font-bold text-xs flex items-center gap-1.5 transition cursor-pointer shadow-xs"
+              >
+                <FileDown className="w-3.5 h-3.5 text-red-400" />
+                <span>५० Pre-Test सेटहरू PDF</span>
+              </button>
+            )}
 
             <button
               type="button"

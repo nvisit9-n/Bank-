@@ -18,6 +18,7 @@ import {
 import { ActivityTrackingService } from '../../services/activityTrackingService';
 import { useApp } from '../../context/AppContext';
 import { PdfExportDialog } from './PdfExportDialog';
+import { isOwnerAdmin } from '../../utils/sanitizer';
 
 export const TimedYouTubePopupModal: React.FC = () => {
   const { user } = useApp();
@@ -198,24 +199,38 @@ export const TimedYouTubePopupModal: React.FC = () => {
                   <CheckCircle2 className="w-10 h-10" />
                 </div>
                 <h4 className="text-lg font-black text-emerald-600 dark:text-emerald-400">
-                  बधाई छ! १०,०००+ प्रश्न भण्डार PDF अनलक भयो
+                  बधाई छ! ५० Pre-Test सेटहरू अनलाइन अभ्यास अनलक भयो
                 </h4>
                 <p className="text-xs text-slate-600 dark:text-slate-300 max-w-sm mx-auto leading-relaxed">
-                  अब तपाईं सम्पूर्ण ५० Pre-Test सेटहरू तथा १०,०००+ प्रश्नहरू आधिकारिक वाटरमार्क र लोगो सहित कुनै पनि समय डाउनलोड गर्न सक्नुहुन्छ।
+                  अब तपाईं सम्पूर्ण ५० Pre-Test सेटहरू तथा १०,०००+ प्रश्नहरू अनलाइन इन्टरएक्टिभ अभ्यास मोडमा कुनै पनि समय निःशुल्क अभ्यास गर्न सक्नुहुन्छ।
                 </p>
                 
                 <div className="pt-2 flex flex-col sm:flex-row gap-2.5 justify-center">
-                  <button
-                    type="button"
-                    onClick={() => {
-                      setIsOpen(false);
-                      setIsPdfExportOpen(true);
-                    }}
-                    className="inline-flex items-center justify-center gap-2 px-5 py-2.5 rounded-xl bg-gradient-to-r from-emerald-600 to-teal-700 text-white font-bold text-xs shadow-md hover:brightness-110 transition cursor-pointer"
-                  >
-                    <FileDown className="w-4 h-4" />
-                    अहिले नै PDF डाउनलोड / प्रिन्ट गर्नुहोस्
-                  </button>
+                  {isOwnerAdmin(user?.email) ? (
+                    <button
+                      type="button"
+                      onClick={() => {
+                        setIsOpen(false);
+                        setIsPdfExportOpen(true);
+                      }}
+                      className="inline-flex items-center justify-center gap-2 px-5 py-2.5 rounded-xl bg-gradient-to-r from-emerald-600 to-teal-700 text-white font-bold text-xs shadow-md hover:brightness-110 transition cursor-pointer"
+                    >
+                      <FileDown className="w-4 h-4" />
+                      व्यवस्थापक PDF डाउनलोड खोल्नुहोस्
+                    </button>
+                  ) : (
+                    <button
+                      type="button"
+                      onClick={() => {
+                        setIsOpen(false);
+                        window.dispatchEvent(new CustomEvent('btn:open-set-selection'));
+                      }}
+                      className="inline-flex items-center justify-center gap-2 px-5 py-2.5 rounded-xl bg-gradient-to-r from-emerald-600 to-teal-700 text-white font-bold text-xs shadow-md hover:brightness-110 transition cursor-pointer"
+                    >
+                      <Sparkles className="w-4 h-4" />
+                      अनलाइन अभ्यास सुरु गर्नुहोस्
+                    </button>
+                  )}
                   <button
                     type="button"
                     onClick={() => setIsOpen(false)}
@@ -228,7 +243,7 @@ export const TimedYouTubePopupModal: React.FC = () => {
             ) : (
               <>
                 <p className="text-xs sm:text-sm text-slate-600 dark:text-slate-300 leading-relaxed">
-                  हाम्रो आधिकारिक च्यानल <strong className="text-red-600 dark:text-red-400 font-bold">{OFFICIAL_CHANNEL.name} ({OFFICIAL_CHANNEL.handle})</strong> लाई १-क्लिकमा Subscribe गरी <strong>१०,०००+ प्रश्न भण्डार</strong> तथा <strong>५० Pre-Test सेटहरू</strong> को पूर्ण PDF निःशुल्क अनलक गर्नुहोस्।
+                  हाम्रो आधिकारिक च्यानल <strong className="text-red-600 dark:text-red-400 font-bold">{OFFICIAL_CHANNEL.name} ({OFFICIAL_CHANNEL.handle})</strong> लाई १-क्लिकमा Subscribe गरी <strong>१०,०००+ प्रश्न भण्डार</strong> तथा <strong>५० Pre-Test सेटहरू</strong> को अनलाइन इन्टरएक्टिभ अभ्यास मोड निःशुल्क अनलक गर्नुहोस्।
                 </p>
 
                 {/* Feature highlights */}
@@ -240,19 +255,19 @@ export const TimedYouTubePopupModal: React.FC = () => {
                   <div className="grid grid-cols-1 sm:grid-cols-2 gap-2 text-[11px] text-slate-600 dark:text-slate-300">
                     <div className="flex items-center gap-1.5">
                       <ShieldCheck className="w-3.5 h-3.5 text-emerald-500 shrink-0" />
-                      <span>१०,०००+ प्रश्न भण्डार (A4 प्रिन्ट-रेडी)</span>
+                      <span>१०,०००+ प्रश्न भण्डार (अनलाइन प्राक्टिस)</span>
                     </div>
                     <div className="flex items-center gap-1.5">
                       <BookOpenCheck className="w-3.5 h-3.5 text-blue-500 shrink-0" />
-                      <span>५० Pre-Test सेटहरू (सबै बैंक तथा संस्थान)</span>
+                      <span>५० Pre-Test सेटहरू (सबै संस्थान तथा बैंक)</span>
                     </div>
                     <div className="flex items-center gap-1.5">
                       <Award className="w-3.5 h-3.5 text-purple-500 shrink-0" />
-                      <span>आधिकारिक लोगो र वाटरमार्क सहित</span>
+                      <span>वास्तविक परीक्षा सिमुलेसन र टाइमर</span>
                     </div>
                     <div className="flex items-center gap-1.5">
                       <CheckCircle2 className="w-3.5 h-3.5 text-emerald-500 shrink-0" />
-                      <span>आजीवन निःशुल्क डाउनलोड पहुँच</span>
+                      <span>आजीवन निःशुल्क अनलाइन पहुँच</span>
                     </div>
                   </div>
                 </div>
@@ -265,7 +280,7 @@ export const TimedYouTubePopupModal: React.FC = () => {
                     className="w-full flex items-center justify-center gap-2 px-5 py-3.5 rounded-2xl bg-gradient-to-r from-[#FF0000] via-[#E50914] to-[#C2185B] text-white font-black text-sm shadow-xl shadow-red-500/25 hover:shadow-red-500/40 hover:brightness-105 active:scale-[0.99] transition cursor-pointer"
                   >
                     <Youtube className="w-5 h-5 fill-current" />
-                    <span>Subscribe YouTube & Unlock 10k+ PDF</span>
+                    <span>Subscribe YouTube & Unlock Practice Sets</span>
                     <ArrowRight className="w-4 h-4" />
                   </button>
 

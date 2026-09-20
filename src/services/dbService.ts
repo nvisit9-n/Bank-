@@ -8,6 +8,7 @@ import { allFiftySets, generateAllFiftySets } from '../data/sangathitDatabase';
 import { MOCK_QUESTIONS, MOCK_STUDY_NOTES } from '../data/mockData';
 import { CURATED_VIDEO_LECTURES, VideoLecture } from '../data/videoLectures';
 import { isUserAdmin } from '../utils/sanitizer';
+import { deduplicateQuestions } from '../utils/questionDeduplicator';
 
 const DB_KEYS = {
   STUDENT_PROFILE: 'btn_student_profile_v2',
@@ -792,7 +793,7 @@ export class DbService {
   }
 
   // ==========================================
-  // 6. QUESTION BANK MANAGER (CMS)
+  // 6. QUESTION BANK MANAGER (CMS) & DEDUPLICATION
   // ==========================================
   static getAllQuestions(): Question[] {
     try {
@@ -800,16 +801,77 @@ export class DbService {
       if (stored) {
         const parsed = JSON.parse(stored);
         if (Array.isArray(parsed) && parsed.length > 0) {
-          return parsed;
+          const { unique } = deduplicateQuestions(parsed);
+          return unique;
         }
       }
     } catch {
       // fallback
     }
+    const { unique } = deduplicateQuestions(MOCK_QUESTIONS);
     try {
-      safeStorage.setItem(DB_KEYS.QUESTIONS_REPO, JSON.stringify(MOCK_QUESTIONS));
+      safeStorage.setItem(DB_KEYS.QUESTIONS_REPO, JSON.stringify(unique));
     } catch {}
-    return MOCK_QUESTIONS;
+    return unique;
+  }
+
+  /**
+   * Automated Deduplication Filter:
+   * Scans questions repository and 50 practice sets, compares question stems and options,
+   * permanently removes all duplicates and repeats, and stores clean unique sets.
+   */
+  static deduplicateAllQuestionsInStorage(): {
+    uniqueQuestionsCount: number;
+    duplicatesRemovedFromRepo: number;
+    uniqueSetsCount: number;
+    duplicatesRemovedFromSets: number;
+  } {
+    // 1. Deduplicate Questions Repo
+    let repoQuestions = this.getAllQuestions();
+    const repoResult = deduplicateQuestions(repoQuestions);
+    safeStorage.setItem(DB_KEYS.QUESTIONS_REPO, JSON.stringify(repoResult.unique));
+
+    // 2. Deduplicate 50 Practice Sets
+    let sets = this.getAllFiftySetsFromDatabase();
+    let setsDuplicatesRemoved = 0;
+    const globalSeenQuestions = new Set<string>();
+
+    const deduplicatedSets = sets.map((s) => {
+      const uniqueInSet = s.questions.filter((q) => {
+        const normKey = (q.question || '')
+          .replace(/^(\s*Q\s*[\d\.\:\-]+|\s*प्रश्न\s*(\s*नं\.?)?\s*[\d\u0966-\u096F\.\:\-]+|[\(\[]?[\d\u0966-\u096F]+[\)\].\:\-]?)/i, '')
+          .replace(/^[\s\.\:\-\,\–\—\*\#]+/, '')
+          .replace(/\s+/g, ' ')
+          .trim()
+          .toLowerCase();
+
+        if (globalSeenQuestions.has(normKey)) {
+          setsDuplicatesRemoved++;
+          return false;
+        }
+        globalSeenQuestions.add(normKey);
+        return true;
+      });
+
+      return {
+        ...s,
+        questions: uniqueInSet.length >= 10 ? uniqueInSet : s.questions
+      };
+    });
+
+    safeStorage.setItem(DB_KEYS.SANGATHIT_50_SETS, JSON.stringify(deduplicatedSets));
+
+    if (typeof window !== 'undefined') {
+      window.dispatchEvent(new CustomEvent('btn:questions-updated'));
+      window.dispatchEvent(new CustomEvent('btn:sets-updated'));
+    }
+
+    return {
+      uniqueQuestionsCount: repoResult.unique.length,
+      duplicatesRemovedFromRepo: repoResult.duplicatesRemoved,
+      uniqueSetsCount: deduplicatedSets.length,
+      duplicatesRemovedFromSets: setsDuplicatesRemoved
+    };
   }
 
   static saveQuestion(newQuestion: Question): Question {

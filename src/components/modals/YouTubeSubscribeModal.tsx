@@ -26,7 +26,7 @@ export const YouTubeSubscribeModal: React.FC<YouTubeSubscribeModalProps> = ({
   isOpen,
   onClose,
   onSuccess,
-  targetResourceName = '१०,०००+ सम्पूर्ण प्रश्न भण्डार तथा ५० Pre-Test सेटहरू PDF'
+  targetResourceName = '१०,०००+ सम्पूर्ण प्रश्न भण्डार तथा ५० Pre-Test सेटहरू (अनलाइन अभ्यास मोड)'
 }) => {
   const { user } = useApp();
   const [hasClickedLink, setHasClickedLink] = useState<boolean>(false);

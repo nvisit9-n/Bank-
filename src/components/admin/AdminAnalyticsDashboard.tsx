@@ -35,6 +35,8 @@ import {
 } from '../../services/adminAnalyticsService';
 import { isOwnerAdmin, PRIMARY_OWNER_EMAIL, BACKUP_ADMIN_EMAIL, isExcludedAdminActivity } from '../../utils/sanitizer';
 import { UserDetailModal } from './UserDetailModal';
+import { PdfExportDialog } from '../modals/PdfExportDialog';
+import { DbService } from '../../services/dbService';
 
 export const AdminAnalyticsDashboard: React.FC = () => {
   const { user, setActiveTab, addToast } = useApp();
@@ -44,6 +46,10 @@ export const AdminAnalyticsDashboard: React.FC = () => {
 
   // Selected User for Detail View Timeline Modal
   const [selectedUserForDetail, setSelectedUserForDetail] = useState<AdminRegisteredUser | null>(null);
+
+  // Admin PDF Export Dialog & Deduplication state
+  const [isPdfDialogOpen, setIsPdfDialogOpen] = useState<boolean>(false);
+  const [isDeduplicating, setIsDeduplicating] = useState<boolean>(false);
 
   // Live Firestore data
   const [registeredUsers, setRegisteredUsers] = useState<AdminRegisteredUser[]>([]);
@@ -297,6 +303,22 @@ export const AdminAnalyticsDashboard: React.FC = () => {
     addToast('एक्जाम एनालिटिक्स CSV सफलतापूर्वक डाउनलोड भयो।', 'success');
   };
 
+  const handleDeduplicateMCQs = () => {
+    setIsDeduplicating(true);
+    try {
+      const stats = DbService.deduplicateAllQuestionsInStorage();
+      const totalRemoved = stats.duplicatesRemovedFromRepo + stats.duplicatesRemovedFromSets;
+      addToast(
+        `Deduplication सम्पन्न भयो! कुल ${totalRemoved} दोहोरिएका प्रश्न हटाइयो। बाँकी अद्वितीय प्रश्नहरू: ${stats.uniqueQuestionsCount.toLocaleString()}।`,
+        'success'
+      );
+    } catch {
+      addToast('Deduplication गर्दा समस्या आयो।', 'error');
+    } finally {
+      setIsDeduplicating(false);
+    }
+  };
+
   return (
     <div className="w-full min-h-screen bg-slate-50 dark:bg-slate-950 text-slate-900 dark:text-slate-100 pb-16">
       
@@ -339,13 +361,39 @@ export const AdminAnalyticsDashboard: React.FC = () => {
             </div>
 
             {/* Right Status & Controls */}
-            <div className="flex items-center space-x-2.5 shrink-0">
+            <div className="flex flex-wrap items-center gap-2 shrink-0">
               <div className="hidden sm:flex items-center space-x-2 px-3 py-1.5 rounded-xl bg-slate-800/80 border border-slate-700 text-[11px] text-slate-300">
                 <span className="w-2 h-2 rounded-full bg-emerald-400 animate-ping" />
-                <span className="text-emerald-400 font-semibold">Firestore Live</span>
+                <span className="text-emerald-400 font-semibold">Live DB</span>
                 <span className="text-slate-500">|</span>
                 <span className="text-slate-400">{lastRefreshedAt.toLocaleTimeString()}</span>
               </div>
+
+              {/* Deduplicate 10k+ MCQs Button */}
+              <button
+                type="button"
+                id="btn-admin-deduplicate-mcqs"
+                onClick={handleDeduplicateMCQs}
+                disabled={isDeduplicating}
+                className="px-3 py-2 rounded-xl bg-purple-900/80 hover:bg-purple-800 border border-purple-700 active:scale-95 text-purple-200 text-xs font-semibold flex items-center gap-1.5 transition cursor-pointer"
+                title="१०,०००+ प्रश्न भण्डारबाट दोहोरिएका सम्पूर्ण प्रश्नहरू हटाउनुहोस्"
+              >
+                <Sparkles className={`w-3.5 h-3.5 ${isDeduplicating ? 'animate-spin text-purple-300' : 'text-purple-400'}`} />
+                <span className="hidden sm:inline">{isDeduplicating ? 'सफा गर्दै...' : 'Deduplicate MCQs'}</span>
+                <span className="sm:hidden">Deduplicate</span>
+              </button>
+
+              {/* Admin A4 PDF Export Button */}
+              <button
+                type="button"
+                id="btn-admin-pdf-export"
+                onClick={() => setIsPdfDialogOpen(true)}
+                className="px-3.5 py-2 rounded-xl bg-rose-700 hover:bg-rose-600 active:scale-95 text-white text-xs font-bold flex items-center gap-1.5 shadow-sm shadow-rose-700/30 transition cursor-pointer"
+                title="व्यवस्थापक विशेष: ५० सेट तथा १०,०००+ प्रश्नहरू A4 PDF डाउनलोड / प्रिन्ट गर्नुहोस्"
+              >
+                <Download className="w-3.5 h-3.5" />
+                <span>A4 PDF Export</span>
+              </button>
 
               <button
                 type="button"
@@ -1017,6 +1065,15 @@ export const AdminAnalyticsDashboard: React.FC = () => {
         <UserDetailModal
           user={selectedUserForDetail}
           onClose={() => setSelectedUserForDetail(null)}
+        />
+      )}
+
+      {/* Admin Exclusive A4 PDF Export Dialog */}
+      {isPdfDialogOpen && (
+        <PdfExportDialog
+          isOpen={isPdfDialogOpen}
+          onClose={() => setIsPdfDialogOpen(false)}
+          defaultScope="all-10k"
         />
       )}
     </div>

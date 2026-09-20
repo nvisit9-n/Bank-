@@ -25,6 +25,7 @@ import { MarkdownRenderer } from '../common/MarkdownRenderer';
 import { safeCopyToClipboard } from '../../utils/safeHelpers';
 import { PaidContentLock } from '../premium/PaidContentLock';
 import { ActivityTrackingService } from '../../services/activityTrackingService';
+import { isOwnerAdmin } from '../../utils/sanitizer';
 
 interface NoteReaderProps {
   note: StudyNote;
@@ -204,14 +205,16 @@ export const NoteReader: React.FC<NoteReaderProps> = ({ note, onClose }) => {
             <Bookmark className={`w-4 h-4 ${bookmarked ? 'fill-white' : ''}`} />
           </button>
 
-          {/* PDF Download / Print Button */}
-          <button
-            onClick={handleDownloadPdf}
-            className="p-2 rounded-xl border border-slate-200 dark:border-slate-700 text-slate-600 dark:text-slate-300 hover:bg-slate-100 dark:hover:bg-slate-800 transition"
-            title="Download / Print Note as PDF"
-          >
-            <Download className="w-4 h-4" />
-          </button>
+          {/* PDF Download / Print Button (Admin Only) */}
+          {isOwnerAdmin(user?.email) && (
+            <button
+              onClick={handleDownloadPdf}
+              className="p-2 rounded-xl border border-slate-200 dark:border-slate-700 text-slate-600 dark:text-slate-300 hover:bg-slate-100 dark:hover:bg-slate-800 transition"
+              title="Download / Print Note as PDF (Admin)"
+            >
+              <Download className="w-4 h-4" />
+            </button>
+          )}
 
           {/* Share Button */}
           <button

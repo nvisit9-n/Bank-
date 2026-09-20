@@ -37,6 +37,7 @@ import { YouTubeSubscriptionGate } from '../../services/youtubeService';
 import { YouTubeSubscribeModal } from './YouTubeSubscribeModal';
 import { ActivityTrackingService } from '../../services/activityTrackingService';
 import { useApp } from '../../context/AppContext';
+import { isOwnerAdmin, PRIMARY_OWNER_EMAIL } from '../../utils/sanitizer';
 
 export interface PdfExportDialogProps {
   isOpen: boolean;
@@ -83,6 +84,47 @@ export const PdfExportDialog: React.FC<PdfExportDialogProps> = ({
 
 
   if (!isOpen) return null;
+
+  // Strict Admin Guard: PDF Download restricted to Admin (nvisit9@gmail.com)
+  if (!isOwnerAdmin(user?.email)) {
+    return (
+      <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/60 backdrop-blur-xs">
+        <div className="bg-white dark:bg-slate-900 rounded-3xl p-6 sm:p-8 max-w-md w-full border border-slate-200 dark:border-slate-800 shadow-2xl space-y-5 text-center">
+          <div className="w-14 h-14 rounded-2xl bg-amber-500/10 text-amber-500 flex items-center justify-center mx-auto">
+            <Lock className="w-7 h-7" />
+          </div>
+          <div>
+            <span className="px-3 py-1 rounded-full bg-blue-100 dark:bg-blue-900/40 text-blue-700 dark:text-blue-300 text-xs font-bold">
+              अनलाइन अभ्यास मोड (View-Only Practice Mode)
+            </span>
+            <h3 className="text-lg font-black text-slate-900 dark:text-white mt-2">
+              विद्यार्थीहरूका लागि अनलाइन अभ्यास खुला छ
+            </h3>
+            <p className="text-xs text-slate-600 dark:text-slate-300 mt-2 leading-relaxed">
+              १०,०००+ प्रश्न भण्डार तथा ५० वटै Pre-Test सेटहरू विद्यार्थीहरूका लागि पूर्ण अनलाइन इन्टरएक्टिभ अभ्यास मोडमा निःशुल्क उपलब्ध छन्। 
+              आधिकारिक A4 PDF डाउनलोड सुविधा केवल प्रशासक खाता (<span className="font-mono text-red-500 font-bold">{PRIMARY_OWNER_EMAIL}</span>) का लागि मात्र Admin CMS भित्र सुरक्षित गरिएको छ।
+            </p>
+          </div>
+          <div className="pt-2 flex flex-col gap-2">
+            <button
+              type="button"
+              onClick={onClose}
+              className="w-full py-3 rounded-2xl bg-[#0F2942] hover:bg-[#1A3A5F] text-white font-black text-xs sm:text-sm shadow-md transition cursor-pointer"
+            >
+              अनलाइन अभ्यास सुरु गर्नुहोस् (Start Online Practice)
+            </button>
+            <button
+              type="button"
+              onClick={onClose}
+              className="w-full py-2 text-xs text-slate-400 hover:text-slate-600 dark:hover:text-slate-200 transition cursor-pointer"
+            >
+              बन्द गर्नुहोस् (Close)
+            </button>
+          </div>
+        </div>
+      </div>
+    );
+  }
 
   const handleToggleModule = (modId: string) => {
     setSelectedModules(prev => 
